@@ -1,0 +1,9 @@
+/build/
+/cmake-build-*/
+/.cache/
+/.idea/
+/.vscode/
+*.log
+*.swp
+*.user
+
