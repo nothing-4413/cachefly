@@ -17,7 +17,7 @@ bash scripts/run.sh
 | 模块 | 内容 | 状态 |
 |---|---|---|
 | 1 | CMake、日志、配置、测试与 CI | 已完成 |
-| 2 | epoll / Reactor 网络层 | 待实现 |
+| 2 | epoll / Reactor 网络层 | 已完成 |
 | 3 | RESP 协议 | 待实现 |
 | 4 | Redis 命令 | 待实现 |
 | 5 | 内存 KV 与 TTL | 待实现 |
@@ -28,4 +28,5 @@ bash scripts/run.sh
 | 10 | 压测与性能分析 | 待实现 |
 | 11 | 部署、简历与面试材料 | 待实现 |
 
-当前详细设计见 [`docs/module-01-foundation.md`](docs/module-01-foundation.md)。
+当前已完成模块 2，详细设计见
+[`docs/module-02-network.md`](docs/module-02-network.md)。
