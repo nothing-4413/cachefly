@@ -9,7 +9,8 @@
 
 namespace cachefly::shard {
 
-Shard::Shard() : worker_([this] { Run(); }) {}
+Shard::Shard(std::size_t maxmemory, storage::EvictionPolicy policy)
+    : store_(storage::KvStore::Clock::now, maxmemory, policy), worker_([this] { Run(); }) {}
 
 Shard::~Shard() {
     {
@@ -51,11 +52,15 @@ void Shard::Run() {
     }
 }
 
-ShardedDatabase::ShardedDatabase(std::size_t shard_count) {
+ShardedDatabase::ShardedDatabase(std::size_t shard_count,
+                                 std::size_t maxmemory,
+                                 storage::EvictionPolicy policy) {
     if (shard_count == 0) throw std::invalid_argument("shard count must be positive");
     shards_.reserve(shard_count);
     for (std::size_t index = 0; index < shard_count; ++index) {
-        shards_.push_back(std::make_unique<Shard>());
+        const std::size_t budget = maxmemory / shard_count +
+                                   (index < maxmemory % shard_count ? 1 : 0);
+        shards_.push_back(std::make_unique<Shard>(budget, policy));
     }
 }
 

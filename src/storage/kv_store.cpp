@@ -4,16 +4,28 @@
 #include <charconv>
 #include <iterator>
 #include <limits>
+#include <stdexcept>
 #include <system_error>
 #include <utility>
 
 namespace cachefly::storage {
 
-KvStore::KvStore(ClockFunction clock) : clock_(std::move(clock)) {}
+EvictionPolicy ParseEvictionPolicy(const std::string& name) {
+    if (name == "lru") return EvictionPolicy::kLru;
+    if (name == "lfu") return EvictionPolicy::kLfu;
+    if (name == "random") return EvictionPolicy::kRandom;
+    if (name == "noeviction") return EvictionPolicy::kNoEviction;
+    throw std::invalid_argument("invalid eviction policy: " + name);
+}
+
+KvStore::KvStore(ClockFunction clock, std::size_t maxmemory, EvictionPolicy policy)
+    : clock_(std::move(clock)), maxmemory_(maxmemory), policy_(policy) {}
 
 std::optional<std::string> KvStore::Get(const std::string& key) {
     auto found = entries_.find(key);
     if (found == entries_.end() || RemoveIfExpired(found, clock_())) return std::nullopt;
+    found->second.last_access = ++access_clock_;
+    if (found->second.frequency < std::numeric_limits<std::uint64_t>::max()) ++found->second.frequency;
     return found->second.value;
 }
 
@@ -29,10 +41,18 @@ command::WriteResult KvStore::Set(command::SetRequest request) {
         return command::WriteResult::kConditionFailed;
     }
 
+    const std::size_t old_bytes = exists ? EntryBytes(found->first, found->second.value) : 0;
+    const std::size_t new_bytes = EntryBytes(request.key, request.value);
+    if (new_bytes > maxmemory_ ||
+        !MakeRoom(memory_usage_ - old_bytes + new_bytes, request.key)) {
+        return command::WriteResult::kNoMemory;
+    }
     std::optional<Clock::time_point> expires_at;
     if (request.ttl.has_value()) expires_at = now + *request.ttl;
+    if (exists) memory_usage_ -= old_bytes;
     entries_.insert_or_assign(std::move(request.key),
-                              Entry{std::move(request.value), expires_at});
+                              Entry{std::move(request.value), expires_at, ++access_clock_, 1});
+    memory_usage_ += new_bytes;
     return command::WriteResult::kOk;
 }
 
@@ -42,6 +62,7 @@ std::int64_t KvStore::Delete(const std::vector<std::string>& keys) {
     for (const std::string& key : keys) {
         auto found = entries_.find(key);
         if (found != entries_.end() && !RemoveIfExpired(found, now)) {
+            memory_usage_ -= EntryBytes(found->first, found->second.value);
             entries_.erase(found);
             ++removed;
         }
@@ -63,7 +84,10 @@ bool KvStore::Expire(const std::string& key, std::chrono::milliseconds ttl) {
     auto found = entries_.find(key);
     const auto now = clock_();
     if (found == entries_.end() || RemoveIfExpired(found, now)) return false;
-    if (ttl <= std::chrono::milliseconds::zero()) entries_.erase(found);
+    if (ttl <= std::chrono::milliseconds::zero()) {
+        memory_usage_ -= EntryBytes(found->first, found->second.value);
+        entries_.erase(found);
+    }
     else found->second.expires_at = now + ttl;
     return true;
 }
@@ -96,8 +120,15 @@ command::IncrementResult KvStore::Increment(const std::string& key, std::int64_t
         return {command::IncrementStatus::kOverflow, 0};
     }
     const std::int64_t result = current + delta;
-    if (found == entries_.end()) entries_.emplace(key, Entry{std::to_string(result), std::nullopt});
-    else found->second.value = std::to_string(result);
+    command::SetRequest request{key, std::to_string(result), std::nullopt,
+                                command::SetCondition::kNone};
+    if (found != entries_.end() && found->second.expires_at.has_value()) {
+        request.ttl = std::chrono::duration_cast<std::chrono::milliseconds>(
+            *found->second.expires_at - now);
+    }
+    if (Set(std::move(request)) == command::WriteResult::kNoMemory) {
+        return {command::IncrementStatus::kNoMemory, 0};
+    }
     return {command::IncrementStatus::kOk, result};
 }
 
@@ -115,6 +146,7 @@ std::size_t KvStore::ActiveExpire(std::size_t max_samples) {
         auto current = iterator++;
         ++examined;
         if (IsExpired(current->second, now)) {
+            memory_usage_ -= EntryBytes(current->first, current->second.value);
             entries_.erase(current);
             ++removed;
         }
@@ -124,7 +156,8 @@ std::size_t KvStore::ActiveExpire(std::size_t max_samples) {
 }
 
 std::size_t KvStore::Size() const noexcept { return entries_.size(); }
-void KvStore::Clear() noexcept { entries_.clear(); expire_scan_offset_ = 0; }
+std::size_t KvStore::MemoryUsage() const noexcept { return memory_usage_; }
+void KvStore::Clear() noexcept { entries_.clear(); memory_usage_ = 0; expire_scan_offset_ = 0; }
 
 bool KvStore::IsExpired(const Entry& entry, Clock::time_point now) const {
     return entry.expires_at.has_value() && *entry.expires_at <= now;
@@ -132,7 +165,45 @@ bool KvStore::IsExpired(const Entry& entry, Clock::time_point now) const {
 
 bool KvStore::RemoveIfExpired(Map::iterator iterator, Clock::time_point now) {
     if (!IsExpired(iterator->second, now)) return false;
+    memory_usage_ -= EntryBytes(iterator->first, iterator->second.value);
     entries_.erase(iterator);
+    return true;
+}
+
+std::size_t KvStore::EntryBytes(const std::string& key, const std::string& value) const noexcept {
+    return sizeof(Entry) + key.size() + value.size();
+}
+
+KvStore::Map::iterator KvStore::SelectVictim(const std::string& protected_key) {
+    auto best = entries_.end();
+    if (policy_ == EvictionPolicy::kRandom && entries_.size() > 1) {
+        random_state_ ^= random_state_ << 13;
+        random_state_ ^= random_state_ >> 7;
+        random_state_ ^= random_state_ << 17;
+        auto candidate = entries_.begin();
+        std::advance(candidate, static_cast<std::ptrdiff_t>(random_state_ % entries_.size()));
+        if (candidate->first != protected_key) return candidate;
+    }
+    for (auto iterator = entries_.begin(); iterator != entries_.end(); ++iterator) {
+        if (iterator->first == protected_key) continue;
+        if (best == entries_.end() || policy_ == EvictionPolicy::kRandom ||
+            (policy_ == EvictionPolicy::kLru && iterator->second.last_access < best->second.last_access) ||
+            (policy_ == EvictionPolicy::kLfu && iterator->second.frequency < best->second.frequency)) best = iterator;
+    }
+    return best;
+}
+
+bool KvStore::MakeRoom(std::size_t projected, const std::string& protected_key) {
+    if (projected <= maxmemory_) return true;
+    if (policy_ == EvictionPolicy::kNoEviction) return false;
+    while (projected > maxmemory_) {
+        auto victim = SelectVictim(protected_key);
+        if (victim == entries_.end()) return false;
+        const std::size_t bytes = EntryBytes(victim->first, victim->second.value);
+        memory_usage_ -= bytes;
+        projected -= bytes;
+        entries_.erase(victim);
+    }
     return true;
 }
 

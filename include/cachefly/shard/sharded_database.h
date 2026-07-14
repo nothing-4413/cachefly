@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -20,7 +21,7 @@ namespace cachefly::shard {
 class Shard final : public cachefly::NonCopyable {
 public:
     using Task = std::function<void(storage::KvStore&)>;
-    Shard();
+    Shard(std::size_t maxmemory, storage::EvictionPolicy policy);
     ~Shard();
     void Post(Task task);
 
@@ -36,7 +37,10 @@ private:
 
 class ShardedDatabase final : public command::Database, public cachefly::NonCopyable {
 public:
-    explicit ShardedDatabase(std::size_t shard_count);
+    explicit ShardedDatabase(
+        std::size_t shard_count,
+        std::size_t maxmemory = std::numeric_limits<std::size_t>::max(),
+        storage::EvictionPolicy policy = storage::EvictionPolicy::kNoEviction);
     ~ShardedDatabase() override = default;
 
     [[nodiscard]] std::optional<std::string> Get(const std::string& key) override;

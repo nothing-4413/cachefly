@@ -1,6 +1,7 @@
 add_executable(cachefly_tests
     test_config.cpp
     test_command.cpp
+    test_eviction.cpp
     test_logger.cpp
     test_main.cpp
     test_net.cpp

@@ -15,6 +15,7 @@
 #include "cachefly/resp/resp_parser.h"
 #include "cachefly/resp/resp_value.h"
 #include "cachefly/shard/sharded_database.h"
+#include "cachefly/storage/kv_store.h"
 
 namespace {
 
@@ -43,7 +44,9 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("failed to open log file: " + config.log_file);
         }
 
-        cachefly::shard::ShardedDatabase database(config.shard_threads);
+        cachefly::shard::ShardedDatabase database(
+            config.shard_threads, config.maxmemory_bytes,
+            cachefly::storage::ParseEvictionPolicy(config.eviction_policy));
         cachefly::command::CommandExecutor executor(&database);
         cachefly::resp::Parser parser;
         cachefly::net::EventLoop loop;
