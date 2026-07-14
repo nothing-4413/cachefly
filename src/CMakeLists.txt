@@ -24,6 +24,10 @@ add_library(cachefly_command
     command/command_registry.cpp
 )
 
+add_library(cachefly_storage
+    storage/kv_store.cpp
+)
+
 target_include_directories(cachefly_base PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(cachefly_base PUBLIC Threads::Threads cachefly_project_options)
 
@@ -36,5 +40,8 @@ target_link_libraries(cachefly_resp PUBLIC cachefly_base)
 target_include_directories(cachefly_command PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(cachefly_command PUBLIC cachefly_resp)
 
+target_include_directories(cachefly_storage PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(cachefly_storage PUBLIC cachefly_command)
+
 add_executable(cachefly main.cpp)
-target_link_libraries(cachefly PRIVATE cachefly_net cachefly_command)
+target_link_libraries(cachefly PRIVATE cachefly_net cachefly_storage)
