@@ -19,7 +19,7 @@ bash scripts/run.sh
 | 1 | CMake、日志、配置、测试与 CI | 已完成 |
 | 2 | epoll / Reactor 网络层 | 已完成 |
 | 3 | RESP 协议 | 已完成 |
-| 4 | Redis 命令 | 待实现 |
+| 4 | Redis 命令 | 已完成 |
 | 5 | 内存 KV 与 TTL | 待实现 |
 | 6 | 多线程分片 | 待实现 |
 | 7 | 缓存淘汰 | 待实现 |
@@ -28,5 +28,5 @@ bash scripts/run.sh
 | 10 | 压测与性能分析 | 待实现 |
 | 11 | 部署、简历与面试材料 | 待实现 |
 
-当前已完成模块 3，详细设计见
-[`docs/module-03-resp.md`](docs/module-03-resp.md)。
+当前已完成模块 4，详细设计见
+[`docs/module-04-commands.md`](docs/module-04-commands.md)。

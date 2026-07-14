@@ -19,6 +19,11 @@ add_library(cachefly_resp
     resp/resp_value.cpp
 )
 
+add_library(cachefly_command
+    command/command_executor.cpp
+    command/command_registry.cpp
+)
+
 target_include_directories(cachefly_base PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(cachefly_base PUBLIC Threads::Threads cachefly_project_options)
 
@@ -28,5 +33,8 @@ target_link_libraries(cachefly_net PUBLIC cachefly_base)
 target_include_directories(cachefly_resp PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(cachefly_resp PUBLIC cachefly_base)
 
+target_include_directories(cachefly_command PUBLIC ${PROJECT_SOURCE_DIR}/include)
+target_link_libraries(cachefly_command PUBLIC cachefly_resp)
+
 add_executable(cachefly main.cpp)
-target_link_libraries(cachefly PRIVATE cachefly_net cachefly_resp)
+target_link_libraries(cachefly PRIVATE cachefly_net cachefly_command)
