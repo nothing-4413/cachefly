@@ -14,7 +14,7 @@
 #include "cachefly/net/tcp_server.h"
 #include "cachefly/resp/resp_parser.h"
 #include "cachefly/resp/resp_value.h"
-#include "cachefly/storage/kv_store.h"
+#include "cachefly/shard/sharded_database.h"
 
 namespace {
 
@@ -43,8 +43,8 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("failed to open log file: " + config.log_file);
         }
 
-        cachefly::storage::KvStore store;
-        cachefly::command::CommandExecutor executor(&store);
+        cachefly::shard::ShardedDatabase database(config.shard_threads);
+        cachefly::command::CommandExecutor executor(&database);
         cachefly::resp::Parser parser;
         cachefly::net::EventLoop loop;
         g_loop = &loop;
@@ -57,8 +57,8 @@ int main(int argc, char* argv[]) {
                      connection->Peer());
         });
         server.SetMessageCallback(
-            [&parser, &executor, &store](const cachefly::net::TcpConnection::Ptr& connection,
-                                         cachefly::net::Buffer* input) {
+            [&parser, &executor](const cachefly::net::TcpConnection::Ptr& connection,
+                                cachefly::net::Buffer* input) {
                 while (input->ReadableBytes() > 0) {
                     std::size_t consumed = 0;
                     std::vector<std::string> arguments;
@@ -74,7 +74,6 @@ int main(int argc, char* argv[]) {
                     }
                     input->Retrieve(consumed);
                     connection->Send(executor.Execute(arguments).Encode());
-                    store.ActiveExpire(32);
                 }
             });
         server.Start();
