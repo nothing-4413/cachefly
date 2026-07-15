@@ -24,9 +24,17 @@ curl http://127.0.0.1:8080/metrics
 Prometheus is available on port 9090. The named volume `cachefly-data` owns persistence files.
 Back up the volume only after a clean stop or filesystem-level snapshot.
 
+## Network limits
+
+`max_clients` caps active RESP clients. `max_request_bytes` caps unread bytes held for one
+client, including an incomplete request. `max_output_bytes` caps outstanding response bytes per
+client across worker completions and the socket output buffer. A client exceeding any limit is
+closed; rejected clients do not consume a command worker or shard task.
+
 ## Failure checks
 
 - Startup failure: validate bind ports, persistence paths and directory permissions.
 - Rising P99: compare shard queueing, CPU saturation, context switches and value size.
 - OOM replies: inspect maxmemory and eviction policy; NoEviction intentionally rejects writes.
+- Client disconnects: inspect the server log for connection, request, or output limit messages.
 - Corrupt AOF: preserve the file, locate the reported byte offset and truncate only an incomplete tail.

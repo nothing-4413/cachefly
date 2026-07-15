@@ -10,6 +10,9 @@ struct ServerConfig {
     std::string bind_address{"0.0.0.0"};
     std::uint16_t port{6379};
     std::size_t shard_threads{4};
+    std::size_t max_clients{10000};
+    std::size_t max_request_bytes{16ULL * 1024ULL * 1024ULL};
+    std::size_t max_output_bytes{64ULL * 1024ULL * 1024ULL};
     std::size_t maxmemory_bytes{512ULL * 1024ULL * 1024ULL};
     std::string eviction_policy{"lru"};
     std::string log_level{"info"};

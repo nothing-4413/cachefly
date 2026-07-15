@@ -89,7 +89,12 @@ int main(int argc, char* argv[]) {
         std::signal(SIGINT, HandleSignal);
         std::signal(SIGTERM, HandleSignal);
 
-        cachefly::net::TcpServer server(&loop, config.bind_address, config.port);
+        cachefly::net::TcpServerOptions server_options;
+        server_options.max_clients = config.max_clients;
+        server_options.connection.max_request_bytes = config.max_request_bytes;
+        server_options.connection.max_output_bytes = config.max_output_bytes;
+        cachefly::net::TcpServer server(
+            &loop, config.bind_address, config.port, server_options);
         server.SetConnectionCallback([&metrics, &dispatcher](
                                          const cachefly::net::TcpConnection::Ptr& connection) {
             const auto session = static_cast<cachefly::command::AsyncDispatcher::SessionId>(
@@ -151,6 +156,9 @@ int main(int argc, char* argv[]) {
                 std::ostringstream json;
                 json << "{\"bind\":\"" << config.bind_address << "\",\"port\":" << config.port
                      << ",\"shard_threads\":" << config.shard_threads
+                     << ",\"max_clients\":" << config.max_clients
+                     << ",\"max_request_bytes\":" << config.max_request_bytes
+                     << ",\"max_output_bytes\":" << config.max_output_bytes
                      << ",\"maxmemory_bytes\":" << config.maxmemory_bytes
                      << ",\"eviction_policy\":\"" << config.eviction_policy << "\"}";
                 return json.str();

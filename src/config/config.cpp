@@ -163,6 +163,9 @@ std::size_t ConfigLoader::ParseMemorySize(const std::string& text) {
 void ConfigLoader::Validate(const ServerConfig& config) {
     if (config.bind_address.empty()) throw std::invalid_argument("bind must not be empty");
     if (config.shard_threads == 0) throw std::invalid_argument("shard_threads must be positive");
+    if (config.max_clients == 0) throw std::invalid_argument("max_clients must be positive");
+    if (config.max_request_bytes == 0) throw std::invalid_argument("max_request_bytes must be positive");
+    if (config.max_output_bytes == 0) throw std::invalid_argument("max_output_bytes must be positive");
     if (config.maxmemory_bytes == 0) throw std::invalid_argument("maxmemory must be positive");
     static const std::unordered_set<std::string> evictions{"lru", "lfu", "random", "noeviction"};
     static const std::unordered_set<std::string> levels{"trace", "debug", "info", "warn", "warning", "error", "fatal"};
@@ -181,6 +184,9 @@ void ConfigLoader::Apply(ServerConfig& config,
     if (key == "bind") config.bind_address = value;
     else if (key == "port") config.port = ParsePort(value, key);
     else if (key == "shard_threads") config.shard_threads = ParseUnsigned(value, key);
+    else if (key == "max_clients") config.max_clients = ParseUnsigned(value, key);
+    else if (key == "max_request_bytes") config.max_request_bytes = ParseMemorySize(value);
+    else if (key == "max_output_bytes") config.max_output_bytes = ParseMemorySize(value);
     else if (key == "maxmemory") config.maxmemory_bytes = ParseMemorySize(value);
     else if (key == "eviction_policy") config.eviction_policy = Lowercase(Trim(value));
     else if (key == "log_level") config.log_level = Lowercase(Trim(value));

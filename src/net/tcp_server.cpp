@@ -2,16 +2,21 @@
 
 #include <utility>
 
+#include <unistd.h>
+
 #include "cachefly/base/logger.h"
 #include "cachefly/net/channel.h"
 #include "cachefly/net/event_loop.h"
 
 namespace cachefly::net {
 
-TcpServer::TcpServer(EventLoop* loop, std::string address, std::uint16_t port)
+TcpServer::TcpServer(EventLoop* loop,
+                     std::string address,
+                     std::uint16_t port,
+                     TcpServerOptions options)
     : loop_(loop), listen_socket_(Socket::CreateNonBlocking()),
       listen_channel_(std::make_unique<Channel>(loop, listen_socket_.Fd())),
-      address_(std::move(address)), port_(port) {
+      address_(std::move(address)), port_(port), options_(options) {
     listen_socket_.SetReuseAddress(true);
     listen_socket_.Bind(address_, port_);
     listen_channel_->SetReadCallback([this] { HandleAccept(); });
@@ -51,8 +56,14 @@ void TcpServer::HandleAccept() {
         std::uint16_t port = 0;
         const int client_fd = listen_socket_.Accept(&address, &port);
         if (client_fd < 0) break;
+        if (connections_.size() >= options_.max_clients) {
+            LOG_WARN("connection limit reached; rejecting " + address + ':' +
+                     std::to_string(port));
+            ::close(client_fd);
+            continue;
+        }
         auto connection = std::make_shared<TcpConnection>(
-            loop_, client_fd, address + ':' + std::to_string(port));
+            loop_, client_fd, address + ':' + std::to_string(port), options_.connection);
         connection->SetConnectionCallback(connection_callback_);
         connection->SetMessageCallback(message_callback_);
         connection->SetTrafficCallback(traffic_callback_);

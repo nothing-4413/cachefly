@@ -8,6 +8,17 @@
 #include "cachefly/net/tcp_connection.h"
 
 namespace cachefly::http {
+namespace {
+
+net::TcpServerOptions AdminServerOptions() {
+    net::TcpServerOptions options;
+    options.max_clients = 128;
+    options.connection.max_request_bytes = 64ULL * 1024ULL;
+    options.connection.max_output_bytes = 1ULL * 1024ULL * 1024ULL;
+    return options;
+}
+
+}  // namespace
 
 AdminServer::AdminServer(net::EventLoop* loop,
                          const std::string& address,
@@ -18,7 +29,7 @@ AdminServer::AdminServer(net::EventLoop* loop,
     : metrics_(metrics),
       status_callback_(std::move(status)),
       config_callback_(std::move(config)),
-      server_(loop, address, port) {
+      server_(loop, address, port, AdminServerOptions()) {
     server_.SetMessageCallback([this](const net::TcpConnection::Ptr& connection,
                                       net::Buffer* input) {
         const std::string_view data = input->View();

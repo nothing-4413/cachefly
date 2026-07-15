@@ -17,3 +17,7 @@ commands before saving a snapshot.
 CI exercises strict warnings, ASan+UBSan, TSan, process-level Redis compatibility, a 20,000-request
 concurrent pipeline run, and the deployment image. Sanitizer options are real build inputs rather than
 unused switches.
+
+The RESP listener enforces configured connection, unread-request, and outstanding-response limits.
+Output accounting starts when worker threads submit a reply, so slow clients cannot bypass the cap by
+building an unbounded cross-thread callback queue. The admin listener has separate explicit bounds.

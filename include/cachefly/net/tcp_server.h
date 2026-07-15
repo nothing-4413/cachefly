@@ -14,9 +14,17 @@ namespace cachefly::net {
 class Channel;
 class EventLoop;
 
+struct TcpServerOptions {
+    std::size_t max_clients{10000};
+    TcpConnectionOptions connection;
+};
+
 class TcpServer final : public cachefly::NonCopyable {
 public:
-    TcpServer(EventLoop* loop, std::string address, std::uint16_t port);
+    TcpServer(EventLoop* loop,
+              std::string address,
+              std::uint16_t port,
+              TcpServerOptions options = {});
     ~TcpServer();
 
     void SetConnectionCallback(TcpConnection::ConnectionCallback callback);
@@ -34,6 +42,7 @@ private:
     std::unique_ptr<Channel> listen_channel_;
     std::string address_;
     std::uint16_t port_;
+    TcpServerOptions options_;
     bool started_{false};
     std::unordered_map<int, TcpConnection::Ptr> connections_;
     TcpConnection::ConnectionCallback connection_callback_;

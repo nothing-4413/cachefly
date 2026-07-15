@@ -13,9 +13,14 @@
 
 namespace cachefly::net {
 
-TcpConnection::TcpConnection(EventLoop* loop, int fd, std::string peer)
+TcpConnection::TcpConnection(EventLoop* loop,
+                             int fd,
+                             std::string peer,
+                             TcpConnectionOptions options)
     : loop_(loop), fd_(fd), peer_(std::move(peer)),
-      channel_(std::make_unique<Channel>(loop, fd)) {
+      channel_(std::make_unique<Channel>(loop, fd)),
+      max_request_bytes_(options.max_request_bytes),
+      max_output_bytes_(options.max_output_bytes) {
     channel_->SetReadCallback([this] { HandleRead(); });
     channel_->SetWriteCallback([this] { HandleWrite(); });
     channel_->SetCloseCallback([this] { HandleClose(); });
@@ -29,6 +34,11 @@ bool TcpConnection::Connected() const noexcept { return state_.load() == State::
 
 void TcpConnection::Send(std::string message) {
     if (!Connected()) return;
+    if (!ReserveOutput(message.size())) {
+        LOG_WARN("output limit exceeded for " + peer_);
+        ForceClose();
+        return;
+    }
     auto self = shared_from_this();
     loop_->RunInLoop([self, message = std::move(message)]() mutable {
         self->SendInLoop(std::move(message));
@@ -70,6 +80,11 @@ void TcpConnection::HandleRead() {
     const long count = input_buffer_.ReadFd(fd_, &saved_errno);
     if (count > 0) {
         if (traffic_callback_) traffic_callback_(static_cast<std::size_t>(count), 0);
+        if (input_buffer_.ReadableBytes() > max_request_bytes_) {
+            LOG_WARN("request limit exceeded for " + peer_);
+            HandleClose();
+            return;
+        }
         if (message_callback_) message_callback_(guard, &input_buffer_);
     }
     else if (count == 0) HandleClose();
@@ -84,6 +99,7 @@ void TcpConnection::HandleWrite() {
     int saved_errno = 0;
     const long count = output_buffer_.WriteFd(fd_, &saved_errno);
     if (count > 0) {
+        ReleaseOutput(static_cast<std::size_t>(count));
         if (traffic_callback_) traffic_callback_(0, static_cast<std::size_t>(count));
         if (output_buffer_.ReadableBytes() == 0) {
             channel_->DisableWriting();
@@ -91,6 +107,7 @@ void TcpConnection::HandleWrite() {
         }
     } else if (count < 0 && saved_errno != EAGAIN && saved_errno != EWOULDBLOCK) {
         HandleError();
+        HandleClose();
     }
 }
 
@@ -98,6 +115,10 @@ void TcpConnection::HandleClose() {
     auto guard = shared_from_this();
     if (state_.exchange(State::kDisconnected) == State::kDisconnected) return;
     channel_->DisableAll();
+    input_buffer_.RetrieveAll();
+    const std::size_t buffered = output_buffer_.ReadableBytes();
+    output_buffer_.RetrieveAll();
+    if (buffered > 0) ReleaseOutput(buffered);
     if (connection_callback_) connection_callback_(guard);
     if (close_callback_) close_callback_(guard);
 }
@@ -109,18 +130,42 @@ void TcpConnection::HandleError() {
     LOG_ERROR("connection error for " + peer_ + ": " + std::strerror(socket_error));
 }
 
+void TcpConnection::ForceClose() {
+    auto self = shared_from_this();
+    loop_->RunInLoop([self] { self->HandleClose(); });
+}
+
+bool TcpConnection::ReserveOutput(std::size_t bytes) {
+    std::size_t pending = pending_output_bytes_.load(std::memory_order_relaxed);
+    do {
+        if (bytes > max_output_bytes_ || pending > max_output_bytes_ - bytes) return false;
+    } while (!pending_output_bytes_.compare_exchange_weak(
+        pending, pending + bytes, std::memory_order_relaxed));
+    return true;
+}
+
+void TcpConnection::ReleaseOutput(std::size_t bytes) {
+    pending_output_bytes_.fetch_sub(bytes, std::memory_order_relaxed);
+}
+
 void TcpConnection::SendInLoop(std::string message) {
     loop_->AssertInLoopThread();
-    if (state_.load() == State::kDisconnected) return;
+    if (state_.load() == State::kDisconnected) {
+        ReleaseOutput(message.size());
+        return;
+    }
     std::size_t sent = 0;
     if (!channel_->IsWriting() && output_buffer_.ReadableBytes() == 0) {
         const ssize_t count = ::send(fd_, message.data(), message.size(), MSG_NOSIGNAL);
         if (count >= 0) {
             sent = static_cast<std::size_t>(count);
+            ReleaseOutput(sent);
             if (traffic_callback_ && sent > 0) traffic_callback_(0, sent);
         }
         else if (errno != EAGAIN && errno != EWOULDBLOCK) {
+            ReleaseOutput(message.size());
             HandleError();
+            HandleClose();
             return;
         }
     }

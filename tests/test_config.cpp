@@ -35,6 +35,9 @@ TEST_CASE("default config") {
     const cachefly::ServerConfig config;
     EXPECT_EQ(config.port, 6379);
     EXPECT_EQ(config.shard_threads, 4U);
+    EXPECT_EQ(config.max_clients, 10000U);
+    EXPECT_EQ(config.max_request_bytes, 16U * 1024U * 1024U);
+    EXPECT_EQ(config.max_output_bytes, 64U * 1024U * 1024U);
 }
 
 TEST_CASE("memory size parsing") {
@@ -45,16 +48,24 @@ TEST_CASE("memory size parsing") {
 }
 
 TEST_CASE("file config and command line precedence") {
-    TemporaryFile file("port=6380\nshard_threads=2\n");
+    TemporaryFile file("port=6380\nshard_threads=2\nmax_clients=100\n"
+                       "max_request_bytes=2mb\nmax_output_bytes=3mb\n");
     const auto config = LoadArgs({"cachefly", "--port=6381",
-                                  "--config=" + file.Path(), "--shard_threads=8"});
+                                  "--config=" + file.Path(), "--shard_threads=8",
+                                  "--max_clients=200", "--max_request_bytes=4mb"});
     EXPECT_EQ(config.port, 6381);
     EXPECT_EQ(config.shard_threads, 8U);
+    EXPECT_EQ(config.max_clients, 200U);
+    EXPECT_EQ(config.max_request_bytes, 4U * 1024U * 1024U);
+    EXPECT_EQ(config.max_output_bytes, 3U * 1024U * 1024U);
 }
 
 TEST_CASE("invalid config rejected") {
     EXPECT_THROW(LoadArgs({"cachefly", "--port=0"}), std::invalid_argument);
     EXPECT_THROW(LoadArgs({"cachefly", "--shard_threads=-1"}), std::invalid_argument);
+    EXPECT_THROW(LoadArgs({"cachefly", "--max_clients=0"}), std::invalid_argument);
+    EXPECT_THROW(LoadArgs({"cachefly", "--max_request_bytes=0"}), std::invalid_argument);
+    EXPECT_THROW(LoadArgs({"cachefly", "--max_output_bytes=0"}), std::invalid_argument);
     EXPECT_THROW(LoadArgs({"cachefly", "--unknown=value"}), std::invalid_argument);
     EXPECT_THROW(LoadArgs({"cachefly", "--io_threads=2"}), std::invalid_argument);
 }

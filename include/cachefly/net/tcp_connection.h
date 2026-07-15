@@ -13,6 +13,11 @@ namespace cachefly::net {
 class Channel;
 class EventLoop;
 
+struct TcpConnectionOptions {
+    std::size_t max_request_bytes{16ULL * 1024ULL * 1024ULL};
+    std::size_t max_output_bytes{64ULL * 1024ULL * 1024ULL};
+};
+
 class TcpConnection final : public cachefly::NonCopyable,
                             public std::enable_shared_from_this<TcpConnection> {
 public:
@@ -22,7 +27,10 @@ public:
     using CloseCallback = std::function<void(const Ptr&)>;
     using TrafficCallback = std::function<void(std::size_t, std::size_t)>;
 
-    TcpConnection(EventLoop* loop, int fd, std::string peer);
+    TcpConnection(EventLoop* loop,
+                  int fd,
+                  std::string peer,
+                  TcpConnectionOptions options = {});
     ~TcpConnection();
 
     [[nodiscard]] int Fd() const noexcept;
@@ -45,6 +53,9 @@ private:
     void HandleWrite();
     void HandleClose();
     void HandleError();
+    void ForceClose();
+    bool ReserveOutput(std::size_t bytes);
+    void ReleaseOutput(std::size_t bytes);
     void SendInLoop(std::string message);
     void ShutdownInLoop();
 
@@ -53,6 +64,9 @@ private:
     const std::string peer_;
     std::unique_ptr<Channel> channel_;
     std::atomic<State> state_{State::kConnecting};
+    const std::size_t max_request_bytes_;
+    const std::size_t max_output_bytes_;
+    std::atomic<std::size_t> pending_output_bytes_{0};
     Buffer input_buffer_;
     Buffer output_buffer_;
     ConnectionCallback connection_callback_;
