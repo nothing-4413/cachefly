@@ -25,3 +25,7 @@ building an unbounded cross-thread callback queue. The admin listener has separa
 Snapshot commits use file and parent-directory synchronization around an atomic rename. AOF
 background failures are retained, exposed through health status, and checked before later mutations,
 instead of being logged once while the server silently continues accepting unpersistable writes.
+
+Native and Compose defaults expose services only on loopback and explicitly document the lack of
+AUTH/TLS. The effective-config endpoint and configuration contract cover every accepted runtime key;
+unknown or removed keys fail startup instead of becoming inert compatibility switches.

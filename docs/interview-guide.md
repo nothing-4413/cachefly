@@ -25,11 +25,27 @@ rotating active scan. Redis-compatible TTL returns -2 for absent and -1 for pers
 
 Global maxmemory is divided among shards to avoid a global lock. This can leave capacity stranded in a
 cold shard. LRU uses a logical access clock, LFU a saturating counter, and Random avoids metadata cost.
+LRU and LFU select an exact victim with an O(N) shard scan; this favors transparent correctness in the
+current project and would need sampled candidates or maintained eviction structures at larger scale.
 
 ## AOF and snapshot recovery
 
-AOF records are RESP commands. Always waits for fdatasync; everysec batches it. Snapshot writes a temporary
-file and atomically renames it. AOF is authoritative when enabled to prevent double replay of increments.
+AOF records are RESP commands. Always waits for fdatasync; everysec batches it. Asynchronous write or sync
+errors become permanent, degrade health, and reject later mutations before database handlers run. Snapshot
+syncs its temporary file and parent directory, atomically renames, then syncs the directory again. AOF is
+authoritative when enabled to prevent double replay of increments.
+
+## How is slow-client memory bounded?
+
+Input is capped before protocol dispatch. Response bytes are atomically reserved when worker threads call
+`Send`, so the cap includes cross-thread callbacks as well as the Reactor's socket buffer. Exceeding either
+limit closes the connection, and the accept path independently enforces the active-client limit.
+
+## How do you know configuration switches are real?
+
+Unknown keys fail startup. Every accepted key has validation, a concrete runtime consumer, and a config or
+behavior test. `/config` serializes all effective fields, and `docs/configuration.md` maps each key to its
+runtime effect.
 
 ## How is P99 measured?
 
@@ -46,6 +62,7 @@ server buckets are compared; divergence often indicates network/client queueing 
   state and is intentionally optimized for correctness rather than large-batch throughput.
 - Per-shard memory budgets can be imbalanced and leave capacity stranded in a cold shard.
 - Snapshot occurs on clean shutdown rather than background fork/copy-on-write.
+- Exact LRU/LFU victim selection scans a shard and is O(N) per eviction.
 
 These constraints are deliberate and should be stated before proposing multi-Reactor async continuations,
 cross-shard coordination, richer Redis types, or production security.
