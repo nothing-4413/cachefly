@@ -5,6 +5,7 @@
 #include <cmath>
 #include <fstream>
 #include <limits>
+#include <sstream>
 #include <stdexcept>
 #include <string_view>
 #include <unordered_set>
@@ -77,6 +78,29 @@ std::pair<std::string, std::string> ParseOption(std::string_view argument) {
     }
     return {std::string(argument.substr(2, equals - 2)),
             std::string(argument.substr(equals + 1))};
+}
+
+void AppendJsonString(std::ostringstream& output, std::string_view value) {
+    static constexpr char kHex[] = "0123456789abcdef";
+    output << '"';
+    for (const unsigned char character : value) {
+        switch (character) {
+            case '"': output << "\\\""; break;
+            case '\\': output << "\\\\"; break;
+            case '\b': output << "\\b"; break;
+            case '\f': output << "\\f"; break;
+            case '\n': output << "\\n"; break;
+            case '\r': output << "\\r"; break;
+            case '\t': output << "\\t"; break;
+            default:
+                if (character < 0x20) {
+                    output << "\\u00" << kHex[character >> 4] << kHex[character & 0x0f];
+                } else {
+                    output << static_cast<char>(character);
+                }
+        }
+    }
+    output << '"';
 }
 
 }  // namespace
@@ -158,6 +182,34 @@ std::size_t ConfigLoader::ParseMemorySize(const std::string& text) {
         throw std::overflow_error("memory size is too large: " + text);
     }
     return static_cast<std::size_t>(bytes);
+}
+
+std::string ConfigLoader::ToJson(const ServerConfig& config) {
+    std::ostringstream output;
+    output << "{\"bind\":";
+    AppendJsonString(output, config.bind_address);
+    output << ",\"port\":" << config.port
+           << ",\"shard_threads\":" << config.shard_threads
+           << ",\"max_clients\":" << config.max_clients
+           << ",\"max_request_bytes\":" << config.max_request_bytes
+           << ",\"max_output_bytes\":" << config.max_output_bytes
+           << ",\"maxmemory_bytes\":" << config.maxmemory_bytes
+           << ",\"eviction_policy\":";
+    AppendJsonString(output, config.eviction_policy);
+    output << ",\"log_level\":";
+    AppendJsonString(output, config.log_level);
+    output << ",\"log_file\":";
+    AppendJsonString(output, config.log_file);
+    output << ",\"appendonly\":" << (config.appendonly ? "true" : "false")
+           << ",\"appendfilename\":";
+    AppendJsonString(output, config.appendfilename);
+    output << ",\"appendfsync\":";
+    AppendJsonString(output, config.appendfsync);
+    output << ",\"snapshot\":" << (config.snapshot ? "true" : "false")
+           << ",\"snapshotfilename\":";
+    AppendJsonString(output, config.snapshotfilename);
+    output << ",\"admin_port\":" << config.admin_port << '}';
+    return output.str();
 }
 
 void ConfigLoader::Validate(const ServerConfig& config) {

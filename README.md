@@ -47,6 +47,7 @@ docker compose -f deploy/docker-compose.yml up --build -d
 参见[运维手册](docs/operations.md)、[压测说明](benchmark/README.md)、
 [简历材料](docs/resume.md)和[面试指南](docs/interview-guide.md)。
 安全边界与部署要求见 [`SECURITY.md`](SECURITY.md)。
+全部运行参数及其实际消费路径见[配置契约](docs/configuration.md)。
 
 全部 11 个模块已完成。最终交付说明见
 [`docs/module-11-delivery.md`](docs/module-11-delivery.md)。

@@ -30,6 +30,7 @@ public:
     [[nodiscard]] static ServerConfig LoadFromFile(const std::string& path);
     [[nodiscard]] static ServerConfig LoadFromArgs(int argc, char* argv[]);
     [[nodiscard]] static std::size_t ParseMemorySize(const std::string& text);
+    [[nodiscard]] static std::string ToJson(const ServerConfig& config);
     static void Validate(const ServerConfig& config);
 
 private:

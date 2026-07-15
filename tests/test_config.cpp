@@ -70,3 +70,18 @@ TEST_CASE("invalid config rejected") {
     EXPECT_THROW(LoadArgs({"cachefly", "--unknown=value"}), std::invalid_argument);
     EXPECT_THROW(LoadArgs({"cachefly", "--io_threads=2"}), std::invalid_argument);
 }
+
+TEST_CASE("effective config JSON includes every runtime option") {
+    cachefly::ServerConfig config;
+    config.log_file = "logs/quoted\"name.log";
+    const std::string json = cachefly::ConfigLoader::ToJson(config);
+    const std::vector<std::string> keys{
+        "bind", "port", "shard_threads", "max_clients", "max_request_bytes",
+        "max_output_bytes", "maxmemory_bytes", "eviction_policy", "log_level",
+        "log_file", "appendonly", "appendfilename", "appendfsync", "snapshot",
+        "snapshotfilename", "admin_port"};
+    for (const auto& key : keys) {
+        EXPECT_TRUE(json.find("\"" + key + "\":") != std::string::npos);
+    }
+    EXPECT_TRUE(json.find("quoted\\\"name.log") != std::string::npos);
+}

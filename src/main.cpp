@@ -33,7 +33,11 @@ void HandleSignal(int) {
 }
 
 void Usage(const char* executable) {
-    std::cout << "Usage: " << executable << " [--config=PATH] [--key=value ...]\n";
+    std::cout << "Usage: " << executable << " [--config=PATH] [--key=value ...]\n"
+              << "Keys: bind, port, shard_threads, max_clients, max_request_bytes, "
+                 "max_output_bytes, maxmemory, eviction_policy, log_level, log_file, "
+                 "appendonly, appendfilename, appendfsync, snapshot, snapshotfilename, "
+                 "admin_port\n";
 }
 
 }  // namespace
@@ -163,17 +167,7 @@ int main(int argc, char* argv[]) {
                      << ",\"memory_bytes\":" << bytes << '}';
                 return json.str();
             },
-            [&config] {
-                std::ostringstream json;
-                json << "{\"bind\":\"" << config.bind_address << "\",\"port\":" << config.port
-                     << ",\"shard_threads\":" << config.shard_threads
-                     << ",\"max_clients\":" << config.max_clients
-                     << ",\"max_request_bytes\":" << config.max_request_bytes
-                     << ",\"max_output_bytes\":" << config.max_output_bytes
-                     << ",\"maxmemory_bytes\":" << config.maxmemory_bytes
-                     << ",\"eviction_policy\":\"" << config.eviction_policy << "\"}";
-                return json.str();
-            });
+            [&config] { return cachefly::ConfigLoader::ToJson(config); });
         admin.Start();
         LOG_INFO("cachefly is ready");
         loop.Loop();
