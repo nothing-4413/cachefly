@@ -67,7 +67,7 @@ target_include_directories(cachefly_persist PUBLIC ${PROJECT_SOURCE_DIR}/include
 target_link_libraries(cachefly_persist PUBLIC cachefly_shard)
 
 include(CheckCXXSourceCompiles)
-check_cxx_source_compiles([[ 
+check_cxx_source_compiles([[
     #include <filesystem>
     int main() {
         return std::filesystem::current_path().empty() ? 1 : 0;
