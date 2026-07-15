@@ -10,8 +10,8 @@ services:
       - --snapshot=true
       - --snapshotfilename=/data/cachefly.snapshot
     ports:
-      - "6379:6379"
-      - "8080:8080"
+      - "127.0.0.1:6379:6379"
+      - "127.0.0.1:8080:8080"
     volumes:
       - cachefly-data:/data
     healthcheck:
@@ -25,7 +25,7 @@ services:
     image: prom/prometheus:v2.54.1
     command: ["--config.file=/etc/prometheus/prometheus.yml"]
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:

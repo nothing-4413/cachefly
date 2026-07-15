@@ -33,6 +33,7 @@ private:
 
 TEST_CASE("default config") {
     const cachefly::ServerConfig config;
+    EXPECT_EQ(config.bind_address, "127.0.0.1");
     EXPECT_EQ(config.port, 6379);
     EXPECT_EQ(config.shard_threads, 4U);
     EXPECT_EQ(config.max_clients, 10000U);

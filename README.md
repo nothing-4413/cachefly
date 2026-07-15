@@ -3,6 +3,9 @@
 `cachefly` 是一个使用 C++20 实现的 Redis 协议兼容高性能缓存服务器。项目参考
 DragonflyDB 的分层与 shared-nothing 思想，但不复制其源码。
 
+这是用于展示系统编程与缓存架构能力的项目，不实现 Redis AUTH、ACL 或 TLS。原生和
+Docker Compose 默认仅向本机暴露端口；不要在没有独立访问控制层时发布到不可信网络。
+
 ## 构建
 
 要求 Linux、CMake 3.16+ 以及支持 C++20 的 GCC 或 Clang。
@@ -43,6 +46,7 @@ docker compose -f deploy/docker-compose.yml up --build -d
 
 参见[运维手册](docs/operations.md)、[压测说明](benchmark/README.md)、
 [简历材料](docs/resume.md)和[面试指南](docs/interview-guide.md)。
+安全边界与部署要求见 [`SECURITY.md`](SECURITY.md)。
 
 全部 11 个模块已完成。最终交付说明见
 [`docs/module-11-delivery.md`](docs/module-11-delivery.md)。

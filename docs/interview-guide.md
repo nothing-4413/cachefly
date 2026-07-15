@@ -40,6 +40,8 @@ server buckets are compared; divergence often indicates network/client queueing 
 
 - One network Reactor; command execution is asynchronous, but socket I/O itself is not yet multi-Reactor.
 - RESP2 string values only; no transactions, replication, clustering, ACL, Lua, streams, or complex types.
+- No AUTH or TLS; native and Compose defaults are loopback-only and public exposure requires an
+  external authenticated transport boundary.
 - Cross-shard MSET uses checkpoint/rollback for atomic failure semantics; this copies touched shard
   state and is intentionally optimized for correctness rather than large-batch throughput.
 - Per-shard memory budgets can be imbalanced and leave capacity stranded in a cold shard.

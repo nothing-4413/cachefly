@@ -4,7 +4,7 @@
 
 ```bash
 bash scripts/build.sh Release
-./build/src/cachefly --config=configs/cachefly.conf
+bash scripts/run.sh
 redis-cli -p 6379 PING
 curl http://127.0.0.1:8080/status
 ```
@@ -27,6 +27,10 @@ curl http://127.0.0.1:8080/metrics
 
 Prometheus is available on port 9090. The named volume `cachefly-data` owns persistence files.
 Back up the volume only after a clean stop or filesystem-level snapshot.
+
+All Compose ports bind to host loopback by default. Cachefly does not implement AUTH, ACL, or TLS;
+do not change these bindings to a public interface without a trusted private network, firewall, or
+authenticated TLS proxy. The RESP and admin listeners currently share one configured bind address.
 
 ## Network limits
 
