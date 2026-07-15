@@ -9,6 +9,7 @@
 
 #include "cachefly/base/logger.h"
 #include "cachefly/command/command_executor.h"
+#include "cachefly/command/async_dispatcher.h"
 #include "cachefly/config/config.h"
 #include "cachefly/http/admin_server.h"
 #include "cachefly/metrics/metrics.h"
@@ -81,6 +82,7 @@ int main(int argc, char* argv[]) {
                 aof->Append(command);
             });
         }
+        cachefly::command::AsyncDispatcher dispatcher(&executor, config.shard_threads);
         cachefly::resp::Parser parser;
         cachefly::net::EventLoop loop;
         g_loop = &loop;
@@ -88,9 +90,17 @@ int main(int argc, char* argv[]) {
         std::signal(SIGTERM, HandleSignal);
 
         cachefly::net::TcpServer server(&loop, config.bind_address, config.port);
-        server.SetConnectionCallback([&metrics](const cachefly::net::TcpConnection::Ptr& connection) {
-            if (connection->Connected()) metrics.ConnectionOpened();
-            else metrics.ConnectionClosed();
+        server.SetConnectionCallback([&metrics, &dispatcher](
+                                         const cachefly::net::TcpConnection::Ptr& connection) {
+            const auto session = static_cast<cachefly::command::AsyncDispatcher::SessionId>(
+                connection->Fd());
+            if (connection->Connected()) {
+                metrics.ConnectionOpened();
+                dispatcher.OpenSession(session);
+            } else {
+                metrics.ConnectionClosed();
+                dispatcher.CloseSession(session);
+            }
             LOG_INFO(std::string(connection->Connected() ? "connected: " : "disconnected: ") +
                      connection->Peer());
         });
@@ -98,8 +108,8 @@ int main(int argc, char* argv[]) {
             metrics.AddBytes(read, written);
         });
         server.SetMessageCallback(
-            [&parser, &executor](const cachefly::net::TcpConnection::Ptr& connection,
-                                cachefly::net::Buffer* input) {
+            [&parser, &dispatcher](const cachefly::net::TcpConnection::Ptr& connection,
+                                  cachefly::net::Buffer* input) {
                 while (input->ReadableBytes() > 0) {
                     std::size_t consumed = 0;
                     std::vector<std::string> arguments;
@@ -114,7 +124,16 @@ int main(int argc, char* argv[]) {
                         return;
                     }
                     input->Retrieve(consumed);
-                    connection->Send(executor.Execute(arguments).Encode());
+                    const auto session = static_cast<cachefly::command::AsyncDispatcher::SessionId>(
+                        connection->Fd());
+                    std::weak_ptr<cachefly::net::TcpConnection> weak_connection = connection;
+                    dispatcher.Submit(
+                        session, std::move(arguments),
+                        [weak_connection](std::string response) {
+                            if (const auto retained = weak_connection.lock()) {
+                                retained->Send(std::move(response));
+                            }
+                        });
                 }
             });
         server.Start();
@@ -140,6 +159,7 @@ int main(int argc, char* argv[]) {
         LOG_INFO("cachefly is ready");
         loop.Loop();
         g_loop = nullptr;
+        dispatcher.Stop();
         if (config.snapshot) {
             cachefly::persist::Snapshot::Save(config.snapshotfilename,
                                                database.Snapshot());

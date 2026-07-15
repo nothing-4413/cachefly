@@ -9,6 +9,7 @@ are likely to be challenged in an interview:
 - MSET is one database operation. A shard validates a complete batch before commit; cross-shard failure
   restores checkpoints, and AOF records the command only after the whole operation succeeds.
 
-The next architectural step is asynchronous command continuations so the Reactor never waits on shard
-futures. Until that lands, the project should claim shared-nothing storage ownership, not a nonblocking
-end-to-end execution path.
+The command path now uses a worker dispatcher: different connections execute concurrently, commands from
+one connection remain ordered, and replies return through `TcpConnection::Send`/`EventLoop::QueueInLoop`.
+The Reactor parses frames and enqueues work but never waits on shard futures. Shutdown drains accepted
+commands before saving a snapshot.

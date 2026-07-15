@@ -22,6 +22,7 @@ add_library(cachefly_resp
 add_library(cachefly_metrics metrics/metrics.cpp)
 
 add_library(cachefly_command
+    command/async_dispatcher.cpp
     command/command_executor.cpp
     command/command_registry.cpp
 )

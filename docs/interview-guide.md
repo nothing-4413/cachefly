@@ -13,7 +13,8 @@ complete frame, so a callback can loop through pipelines while preserving a part
 ## Why shared-nothing shards?
 
 Each key maps to one worker that exclusively owns its hash table. Single-key operations need no storage
-lock and INCR is atomic by serialization. Multi-key operations are split by the database facade.
+lock and INCR is atomic by serialization. A connection-ordered dispatcher keeps shard waits off the
+Reactor, while different connections execute concurrently.
 
 ## TTL correctness
 
@@ -37,7 +38,7 @@ server buckets are compared; divergence often indicates network/client queueing 
 
 ## Current limitations
 
-- One network Reactor; storage work is sharded, but the synchronous database facade can pause the Reactor.
+- One network Reactor; command execution is asynchronous, but socket I/O itself is not yet multi-Reactor.
 - RESP2 string values only; no transactions, replication, clustering, ACL, Lua, streams, or complex types.
 - Cross-shard MSET uses checkpoint/rollback for atomic failure semantics; this copies touched shard
   state and is intentionally optimized for correctness rather than large-batch throughput.

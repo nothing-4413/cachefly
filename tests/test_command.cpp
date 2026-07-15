@@ -2,6 +2,7 @@
 #include <chrono>
 #include <cstdint>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -9,6 +10,7 @@
 #include <vector>
 
 #include "cachefly/command/command_executor.h"
+#include "cachefly/command/async_dispatcher.h"
 #include "test_harness.h"
 
 namespace {
@@ -134,4 +136,23 @@ TEST_CASE("failed MSET neither mutates nor emits an AOF callback") {
     EXPECT_TRUE(executor.Execute({"MSET", "a", "1", "b", "2"}).Encode().starts_with("-OOM"));
     EXPECT_TRUE(database.values.empty());
     EXPECT_EQ(mutations, 0U);
+}
+
+TEST_CASE("async dispatcher preserves command order within a session") {
+    FakeDatabase database;
+    cachefly::command::CommandExecutor executor(&database);
+    cachefly::command::AsyncDispatcher dispatcher(&executor, 2);
+    dispatcher.OpenSession(7);
+    std::mutex replies_mutex;
+    std::vector<std::string> replies;
+    const auto collect = [&replies_mutex, &replies](std::string response) {
+        std::lock_guard lock(replies_mutex);
+        replies.push_back(std::move(response));
+    };
+    dispatcher.Submit(7, {"SET", "ordered", "value"}, collect);
+    dispatcher.Submit(7, {"GET", "ordered"}, collect);
+    dispatcher.Stop();
+    EXPECT_EQ(replies.size(), 2U);
+    EXPECT_EQ(replies[0], "+OK\r\n");
+    EXPECT_EQ(replies[1], "$5\r\nvalue\r\n");
 }
