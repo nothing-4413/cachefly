@@ -66,6 +66,18 @@ target_link_libraries(cachefly_shard PUBLIC cachefly_storage)
 target_include_directories(cachefly_persist PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(cachefly_persist PUBLIC cachefly_shard)
 
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles([[ 
+    #include <filesystem>
+    int main() {
+        return std::filesystem::current_path().empty() ? 1 : 0;
+    }
+]] CACHEFLY_STD_FILESYSTEM_LINKS)
+if(NOT CACHEFLY_STD_FILESYSTEM_LINKS)
+    find_library(CACHEFLY_STDCXXFS_LIBRARY stdc++fs REQUIRED)
+    target_link_libraries(cachefly_persist PUBLIC ${CACHEFLY_STDCXXFS_LIBRARY})
+endif()
+
 target_include_directories(cachefly_http PUBLIC ${PROJECT_SOURCE_DIR}/include)
 target_link_libraries(cachefly_http PUBLIC cachefly_net cachefly_metrics)
 
