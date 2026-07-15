@@ -54,6 +54,10 @@ void CommandExecutor::SetMutationCallback(MutationCallback callback) {
     mutation_callback_ = std::move(callback);
 }
 
+void CommandExecutor::SetMutationGuard(MutationGuard guard) {
+    mutation_guard_ = std::move(guard);
+}
+
 resp::Value CommandExecutor::Execute(const std::vector<std::string>& arguments) const {
     const auto started = std::chrono::steady_clock::now();
     const auto finish = [this, started](resp::Value value) {
@@ -74,6 +78,13 @@ resp::Value CommandExecutor::Execute(const std::vector<std::string>& arguments) 
     if (count < command->minimum_arguments ||
         (command->maximum_arguments.has_value() && count > *command->maximum_arguments)) {
         return finish(ArityError(command->name));
+    }
+    if (command->mutating && mutation_guard_) {
+        try {
+            mutation_guard_();
+        } catch (const std::exception&) {
+            return finish(resp::Value::Error("MISCONF persistence is unavailable"));
+        }
     }
     resp::Value response = command->handler(arguments);
     if (command->mutating && response.type != resp::Type::kError &&

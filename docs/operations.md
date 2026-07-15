@@ -13,6 +13,10 @@ Stop with SIGTERM so queued AOF records drain and an enabled snapshot is written
 snapshot files on persistent storage. Restore is automatic: AOF is authoritative when enabled;
 otherwise the snapshot is loaded.
 
+Snapshot replacement synchronizes the temporary file and containing directory before and after the
+atomic rename. An asynchronous AOF write or `fdatasync` failure permanently degrades the writer;
+subsequent mutations return `MISCONF` before changing memory, and `/status` reports `degraded`.
+
 ## Docker Compose
 
 ```bash

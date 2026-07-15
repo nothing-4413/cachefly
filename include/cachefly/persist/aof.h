@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <deque>
+#include <exception>
 #include <future>
 #include <memory>
 #include <mutex>
@@ -22,6 +23,7 @@ public:
     ~AofWriter();
 
     void Append(const std::vector<std::string>& command);
+    void CheckError() const;
 
     template <typename Callback>
     static std::size_t Replay(const std::string& path,
@@ -35,14 +37,16 @@ private:
     };
 
     void Run();
+    void SetFailure(std::exception_ptr failure);
     void WriteRecord(const Record& record);
 
     std::string path_;
     FsyncPolicy policy_;
     int fd_{-1};
-    std::mutex mutex_;
+    mutable std::mutex mutex_;
     std::condition_variable condition_;
     std::deque<Record> queue_;
+    std::exception_ptr failure_;
     bool stopping_{false};
     std::thread worker_;
 };

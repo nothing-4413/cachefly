@@ -45,11 +45,17 @@ void AofWriter::Append(const std::vector<std::string>& command) {
     if (durable) future = durable->get_future();
     {
         std::lock_guard lock(mutex_);
+        if (failure_) std::rethrow_exception(failure_);
         if (stopping_) throw std::runtime_error("AOF writer is stopping");
         queue_.push_back({resp::EncodeCommand(command), durable});
     }
     condition_.notify_one();
     if (durable) future.get();
+}
+
+void AofWriter::CheckError() const {
+    std::lock_guard lock(mutex_);
+    if (failure_) std::rethrow_exception(failure_);
 }
 
 void AofWriter::Run() {
@@ -79,16 +85,35 @@ void AofWriter::Run() {
                 }
                 if (record.durable) record.durable->set_value();
             } catch (...) {
-                if (record.durable) record.durable->set_exception(std::current_exception());
-                else LOG_ERROR("asynchronous AOF write failed");
+                const auto failure = std::current_exception();
+                if (record.durable) record.durable->set_exception(failure);
+                SetFailure(failure);
+                LOG_ERROR("AOF entered a permanent failure state");
             }
         }
         const auto now = std::chrono::steady_clock::now();
         if (policy_ == FsyncPolicy::kEverySecond && dirty && now >= next_sync) {
-            if (::fdatasync(fd_) < 0) LOG_ERROR("AOF fdatasync failed");
+            if (::fdatasync(fd_) < 0) {
+                SetFailure(std::make_exception_ptr(std::system_error(
+                    errno, std::generic_category(), "fdatasync AOF")));
+                LOG_ERROR("AOF entered a permanent failure state after fdatasync");
+            }
             dirty = false;
         }
         if (now >= next_sync) next_sync = now + std::chrono::seconds(1);
+    }
+}
+
+void AofWriter::SetFailure(std::exception_ptr failure) {
+    std::deque<Record> rejected;
+    {
+        std::lock_guard lock(mutex_);
+        if (!failure_) failure_ = failure;
+        failure = failure_;
+        rejected.swap(queue_);
+    }
+    for (auto& record : rejected) {
+        if (record.durable) record.durable->set_exception(failure);
     }
 }
 

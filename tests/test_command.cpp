@@ -4,6 +4,7 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <system_error>
 #include <unordered_map>
@@ -134,6 +135,17 @@ TEST_CASE("failed MSET neither mutates nor emits an AOF callback") {
     std::size_t mutations = 0;
     executor.SetMutationCallback([&mutations](const auto&) { ++mutations; });
     EXPECT_TRUE(executor.Execute({"MSET", "a", "1", "b", "2"}).Encode().starts_with("-OOM"));
+    EXPECT_TRUE(database.values.empty());
+    EXPECT_EQ(mutations, 0U);
+}
+
+TEST_CASE("mutation guard rejects writes before database changes") {
+    FakeDatabase database;
+    cachefly::command::CommandExecutor executor(&database);
+    std::size_t mutations = 0;
+    executor.SetMutationGuard([] { throw std::runtime_error("persistence failed"); });
+    executor.SetMutationCallback([&mutations](const auto&) { ++mutations; });
+    EXPECT_TRUE(executor.Execute({"SET", "key", "value"}).Encode().starts_with("-MISCONF"));
     EXPECT_TRUE(database.values.empty());
     EXPECT_EQ(mutations, 0U);
 }

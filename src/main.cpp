@@ -81,6 +81,7 @@ int main(int argc, char* argv[]) {
             executor.SetMutationCallback([&aof](const std::vector<std::string>& command) {
                 aof->Append(command);
             });
+            executor.SetMutationGuard([&aof] { aof->CheckError(); });
         }
         cachefly::command::AsyncDispatcher dispatcher(&executor, config.shard_threads);
         cachefly::resp::Parser parser;
@@ -144,10 +145,20 @@ int main(int argc, char* argv[]) {
         server.Start();
         cachefly::http::AdminServer admin(
             &loop, config.bind_address, config.admin_port, &metrics,
-            [&database, &metrics] {
+            [&database, &metrics, &aof] {
                 const auto [keys, bytes] = database.Stats();
+                bool persistence_ok = true;
+                if (aof) {
+                    try {
+                        aof->CheckError();
+                    } catch (const std::exception&) {
+                        persistence_ok = false;
+                    }
+                }
                 std::ostringstream json;
-                json << "{\"status\":\"ok\",\"connections\":" << metrics.ActiveConnections()
+                json << "{\"status\":\"" << (persistence_ok ? "ok" : "degraded")
+                     << "\",\"persistence\":\"" << (persistence_ok ? "ok" : "error")
+                     << "\",\"connections\":" << metrics.ActiveConnections()
                      << ",\"commands\":" << metrics.Commands() << ",\"keys\":" << keys
                      << ",\"memory_bytes\":" << bytes << '}';
                 return json.str();

@@ -21,3 +21,7 @@ unused switches.
 The RESP listener enforces configured connection, unread-request, and outstanding-response limits.
 Output accounting starts when worker threads submit a reply, so slow clients cannot bypass the cap by
 building an unbounded cross-thread callback queue. The admin listener has separate explicit bounds.
+
+Snapshot commits use file and parent-directory synchronization around an atomic rename. AOF
+background failures are retained, exposed through health status, and checked before later mutations,
+instead of being logged once while the server silently continues accepting unpersistable writes.
