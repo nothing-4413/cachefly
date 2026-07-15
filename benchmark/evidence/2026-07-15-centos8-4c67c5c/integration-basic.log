@@ -1,0 +1,27 @@
++ set -euo pipefail
++ binary=./build-release/src/cachefly
++ mode=basic
++ log_file=/tmp/cachefly-smoke.log
++ server_pid=12149
++ trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
++ ./build-release/src/cachefly --bind=127.0.0.1 --port=16379 --admin_port=18080 --shard_threads=2 --maxmemory=64mb
++ for _ in {1..40}
++ redis-cli -h 127.0.0.1 -p 16379 PING
++ grep -q PONG
++ break
++ [[ basic == all ]]
++ [[ basic == basic ]]
+++ redis-cli -h 127.0.0.1 -p 16379 SET smoke value
++ test OK = OK
+++ redis-cli -h 127.0.0.1 -p 16379 GET smoke
++ test value = value
+++ redis-cli -h 127.0.0.1 -p 16379 INCR counter
++ test 1 = 1
++ [[ basic == all ]]
++ [[ basic == pipeline ]]
++ [[ basic == all ]]
++ [[ basic == admin ]]
++ [[ basic == all ]]
++ [[ basic == benchmark ]]
++ kill 12149
++ wait 12149

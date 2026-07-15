@@ -7,3 +7,5 @@ revision and host metadata beside CSV/JSON output.
 `bash benchmark/matrix.sh ./build/src/cachefly` compares 1/2/4/8 shards and pipeline depths
 1/8/32. Use an isolated Linux host with fixed CPU frequency. CI samples are correctness checks,
 not capacity numbers.
+
+Auditable run: [CentOS 8 VM, commit 4c67c5c, 2026-07-15](evidence/2026-07-15-centos8-4c67c5c/README.md).

@@ -1,0 +1,25 @@
++ set -euo pipefail
++ binary=./build-release/src/cachefly
++ mode=pipeline
++ log_file=/tmp/cachefly-smoke.log
++ server_pid=12164
++ trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
++ ./build-release/src/cachefly --bind=127.0.0.1 --port=16379 --admin_port=18080 --shard_threads=2 --maxmemory=64mb
++ for _ in {1..40}
++ redis-cli -h 127.0.0.1 -p 16379 PING
++ grep -q PONG
++ break
++ [[ pipeline == all ]]
++ [[ pipeline == basic ]]
++ [[ pipeline == all ]]
++ [[ pipeline == pipeline ]]
++ redis-benchmark -h 127.0.0.1 -p 16379 -n 100 -c 2 -P 8 -t set --csv
+WARNING: Could not fetch server CONFIG
+"test","rps","avg_latency_ms","min_latency_ms","p50_latency_ms","p95_latency_ms","p99_latency_ms","max_latency_ms"
+"SET","422.76","0.207","0.088","0.207","0.319","0.319","0.319"
++ [[ pipeline == all ]]
++ [[ pipeline == admin ]]
++ [[ pipeline == all ]]
++ [[ pipeline == benchmark ]]
++ kill 12164
++ wait 12164

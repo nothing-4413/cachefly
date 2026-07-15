@@ -1,0 +1,8 @@
+Internal ctest changing into directory: /dev/shm/cachefly-test-4c67c5c/build-tsan
+Test project /dev/shm/cachefly-test-4c67c5c/build-tsan
+    Start 1: cachefly.unit
+1/1 Test #1: cachefly.unit ....................   Passed    0.05 sec
+
+100% tests passed, 0 tests failed out of 1
+
+Total Test time (real) =   0.05 sec

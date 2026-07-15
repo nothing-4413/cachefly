@@ -1,0 +1,25 @@
++ set -euo pipefail
++ binary=./build-release/src/cachefly
++ mode=admin
++ log_file=/tmp/cachefly-smoke.log
++ server_pid=12177
++ trap 'kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true' EXIT
++ for _ in {1..40}
++ ./build-release/src/cachefly --bind=127.0.0.1 --port=16379 --admin_port=18080 --shard_threads=2 --maxmemory=64mb
++ redis-cli -h 127.0.0.1 -p 16379 PING
++ grep -q PONG
++ break
++ [[ admin == all ]]
++ [[ admin == basic ]]
++ [[ admin == all ]]
++ [[ admin == pipeline ]]
++ [[ admin == all ]]
++ [[ admin == admin ]]
++ curl --fail --silent http://127.0.0.1:18080/metrics
++ grep -q cachefly_commands_total
++ curl --fail --silent http://127.0.0.1:18080/status
++ grep -q '"status":"ok"'
++ [[ admin == all ]]
++ [[ admin == benchmark ]]
++ kill 12177
++ wait 12177

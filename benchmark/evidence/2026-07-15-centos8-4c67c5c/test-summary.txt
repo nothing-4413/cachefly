@@ -1,0 +1,17 @@
+tested_commit=4c67c5c20a0f9ebf1f0c05dfcc101c6155281eaf
+bundle_sha256=8c0fb9c01f4dacd05dbe021dfc3f759e0a0551883b1a4fbf6bcf1728255090ef
+release_build=PASS
+unit_test_cases=43
+unit_tests=PASS
+integration_basic=PASS
+integration_pipeline=PASS
+integration_admin=PASS
+integration_benchmark_smoke=PASS
+integration_concurrency=PASS
+integration_resource_limits=PASS
+asan_ubsan=PASS
+tsan=PASS
+benchmark_matrix=PASS
+benchmark_scenarios=12
+benchmark_rows=36
+memtier_benchmark=NOT_INSTALLED

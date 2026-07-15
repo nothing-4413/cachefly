@@ -1,0 +1,57 @@
+tested_commit=4c67c5c20a0f9ebf1f0c05dfcc101c6155281eaf
+bundle_sha256=8c0fb9c01f4dacd05dbe021dfc3f759e0a0551883b1a4fbf6bcf1728255090ef
+tested_at=2026-07-15T13:54:42+08:00
+Linux 192.168.237.128 4.18.0-348.el8.x86_64 #1 SMP Tue Oct 19 15:14:17 UTC 2021 x86_64 x86_64 x86_64 GNU/Linux
+NAME="CentOS Linux"
+VERSION="8"
+ID="centos"
+ID_LIKE="rhel fedora"
+VERSION_ID="8"
+PLATFORM_ID="platform:el8"
+PRETTY_NAME="CentOS Linux 8"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:centos:centos:8"
+HOME_URL="https://centos.org/"
+BUG_REPORT_URL="https://bugs.centos.org/"
+CENTOS_MANTISBT_PROJECT="CentOS-8"
+CENTOS_MANTISBT_PROJECT_VERSION="8"
+cpu_count=8
+Architecture:        x86_64
+CPU op-mode(s):      32-bit, 64-bit
+Byte Order:          Little Endian
+CPU(s):              8
+On-line CPU(s) list: 0-7
+Thread(s) per core:  1
+Core(s) per socket:  4
+Socket(s):           2
+NUMA node(s):        1
+Vendor ID:           GenuineIntel
+BIOS Vendor ID:      GenuineIntel
+CPU family:          6
+Model:               183
+Model name:          Intel(R) Core(TM) i9-14900HX
+BIOS Model name:     Intel(R) Core(TM) i9-14900HX
+Stepping:            1
+CPU MHz:             2419.199
+BogoMIPS:            4838.39
+Hypervisor vendor:   VMware
+Virtualization type: full
+L1d cache:           48K
+L1i cache:           32K
+L2 cache:            2048K
+L3 cache:            36864K
+NUMA node0 CPU(s):   0-7
+Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ss ht syscall nx pdpe1gb rdtscp lm constant_tsc arch_perfmon rep_good nopl xtopology tsc_reliable nonstop_tsc cpuid pni pclmulqdq ssse3 fma cx16 pcid sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand hypervisor lahf_lm abm 3dnowprefetch invpcid_single pti ssbd ibrs ibpb stibp fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves avx_vnni arat umip gfni vaes vpclmulqdq rdpid movdiri movdir64b fsrm md_clear serialize flush_l1d arch_capabilities
+              total        used        free      shared  buff/cache   available
+Mem:          2.7Gi       1.4Gi       252Mi       193Mi       1.1Gi       991Mi
+Swap:         2.0Gi       460Mi       1.5Gi
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/sda1        17G   16G  188M  99% /
+clang version 12.0.1 (Red Hat 12.0.1-4.module_el8.5.0+1025+93159d6c)
+Target: x86_64-unknown-linux-gnu
+Thread model: posix
+InstalledDir: /usr/bin
+cmake version 3.20.2
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+redis-benchmark 8.6.2

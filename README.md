@@ -38,11 +38,28 @@ redis-cli -p 6379 PING
 
 GitHub Actions 执行严格编译警告、单元测试、Redis 客户端进程集成测试、20,000 请求并发 pipeline
 稳定性测试、网络资源限制测试、ASan+UBSan、TSan 和最终 Docker 镜像构建。压测矩阵会记录 commit
-与机器环境；只有在专用机器上运行后才应把吞吐或 P99 数字写入简历。
+与机器环境；CI correctness smoke 不作为容量数字。
 
 ```bash
 bash benchmark/matrix.sh ./build/src/cachefly
 ```
+
+### Linux VM 实测
+
+提交 `4c67c5c` 在 CentOS 8 VMware（8 vCPU、2.7 GiB RAM、Clang 12、Redis benchmark 8.6.2）
+完成 Release 严格构建、43 个单元用例、全部进程集成测试、ASan+UBSan、TSan，以及
+1/2/4/8 shards × pipeline 1/8/32 的 12 场矩阵。每场使用 100,000 请求、50 客户端和 64 B value。
+
+该虚拟机上的峰值均出现在 4 shards、pipeline 1：
+
+| Command | Requests/sec | P99 latency |
+|---|---:|---:|
+| SET | 68,166.33 | 1.415 ms |
+| GET | 64,102.57 | 1.671 ms |
+| INCR | 68,634.18 | 1.319 ms |
+
+这些数字只描述该 VM、该提交和该参数组合，不代表生产容量。完整环境、构建日志、sanitizer 日志、
+12 份原始 CSV 和合并数据见[可审计测试证据](benchmark/evidence/2026-07-15-centos8-4c67c5c/README.md)。
 
 ## 运行接口
 

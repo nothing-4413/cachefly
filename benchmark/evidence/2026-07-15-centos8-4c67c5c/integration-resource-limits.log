@@ -1,0 +1,16 @@
++ set -euo pipefail
++ binary=./build-release/src/cachefly
++ log_file=/tmp/cachefly-resource-limits.log
++ server_pid=12367
++ trap 'status=$?; kill "${server_pid}" 2>/dev/null || true; wait "${server_pid}" 2>/dev/null || true; if [ "${status}" -ne 0 ]; then cat "${log_file}"; fi; exit "${status}"' EXIT
++ for _ in {1..50}
++ redis-cli -h 127.0.0.1 -p 16382 PING
++ grep -q PONG
++ ./build-release/src/cachefly --bind=127.0.0.1 --port=16382 --admin_port=18083 --shard_threads=2 --maxmemory=32mb --max_clients=1 --max_request_bytes=4kb --max_output_bytes=512b
++ break
++ python3 -
++ status=0
++ kill 12367
++ wait 12367
++ '[' 0 -ne 0 ']'
++ exit 0
