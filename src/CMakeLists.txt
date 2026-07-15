@@ -74,8 +74,7 @@ check_cxx_source_compiles([[
     }
 ]] CACHEFLY_STD_FILESYSTEM_LINKS)
 if(NOT CACHEFLY_STD_FILESYSTEM_LINKS)
-    find_library(CACHEFLY_STDCXXFS_LIBRARY stdc++fs REQUIRED)
-    target_link_libraries(cachefly_persist PUBLIC ${CACHEFLY_STDCXXFS_LIBRARY})
+    target_link_libraries(cachefly_persist PUBLIC stdc++fs)
 endif()
 
 target_include_directories(cachefly_http PUBLIC ${PROJECT_SOURCE_DIR}/include)
