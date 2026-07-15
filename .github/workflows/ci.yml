@@ -25,5 +25,31 @@ jobs:
         run: bash -x tests/integration/smoke.sh ./build/src/cachefly admin
       - name: Integration benchmark smoke
         run: bash -x tests/integration/smoke.sh ./build/src/cachefly benchmark
+      - name: Concurrent pipeline stability
+        run: bash -x tests/integration/concurrency.sh ./build/src/cachefly
       - name: Build deployment image
         run: docker build -f deploy/Dockerfile -t cachefly:ci .
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: asan-ubsan
+            flags: -DCACHEFLY_ENABLE_ASAN=ON -DCACHEFLY_ENABLE_UBSAN=ON
+          - name: tsan
+            flags: -DCACHEFLY_ENABLE_TSAN=ON
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DCACHEFLY_WARNINGS_AS_ERRORS=ON ${{ matrix.flags }}
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+        run: ctest --test-dir build --output-on-failure

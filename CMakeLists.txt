@@ -9,6 +9,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(CACHEFLY_BUILD_TESTS "Build unit tests" ON)
 option(CACHEFLY_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(CACHEFLY_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+option(CACHEFLY_ENABLE_TSAN "Enable ThreadSanitizer" OFF)
 option(CACHEFLY_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 
 add_library(cachefly_project_options INTERFACE)
@@ -26,14 +28,31 @@ else()
     endif()
 endif()
 
-if(CACHEFLY_ENABLE_ASAN)
+if(CACHEFLY_ENABLE_TSAN AND (CACHEFLY_ENABLE_ASAN OR CACHEFLY_ENABLE_UBSAN))
+    message(FATAL_ERROR "ThreadSanitizer cannot be combined with ASan or UBSan")
+endif()
+
+if(CACHEFLY_ENABLE_ASAN OR CACHEFLY_ENABLE_UBSAN OR CACHEFLY_ENABLE_TSAN)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set(CACHEFLY_SANITIZERS "")
+        if(CACHEFLY_ENABLE_ASAN)
+            list(APPEND CACHEFLY_SANITIZERS address)
+        endif()
+        if(CACHEFLY_ENABLE_UBSAN)
+            list(APPEND CACHEFLY_SANITIZERS undefined)
+        endif()
+        if(CACHEFLY_ENABLE_TSAN)
+            list(APPEND CACHEFLY_SANITIZERS thread)
+        endif()
+        list(JOIN CACHEFLY_SANITIZERS "," CACHEFLY_SANITIZER_LIST)
         target_compile_options(cachefly_project_options INTERFACE
-            -fsanitize=address -fno-omit-frame-pointer
+            -fsanitize=${CACHEFLY_SANITIZER_LIST} -fno-omit-frame-pointer
         )
-        target_link_options(cachefly_project_options INTERFACE -fsanitize=address)
+        target_link_options(cachefly_project_options INTERFACE
+            -fsanitize=${CACHEFLY_SANITIZER_LIST}
+        )
     else()
-        message(FATAL_ERROR "CACHEFLY_ENABLE_ASAN requires GCC or Clang")
+        message(FATAL_ERROR "Sanitizers require GCC or Clang")
     endif()
 endif()
 
@@ -43,4 +62,3 @@ if(CACHEFLY_BUILD_TESTS)
     include(CTest)
     add_subdirectory(tests)
 endif()
-

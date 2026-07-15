@@ -13,3 +13,7 @@ The command path now uses a worker dispatcher: different connections execute con
 one connection remain ordered, and replies return through `TcpConnection::Send`/`EventLoop::QueueInLoop`.
 The Reactor parses frames and enqueues work but never waits on shard futures. Shutdown drains accepted
 commands before saving a snapshot.
+
+CI exercises strict warnings, ASan+UBSan, TSan, process-level Redis compatibility, a 20,000-request
+concurrent pipeline run, and the deployment image. Sanitizer options are real build inputs rather than
+unused switches.
