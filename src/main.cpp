@@ -3,12 +3,15 @@
 #include <iostream>
 #include <stdexcept>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
 #include "cachefly/base/logger.h"
 #include "cachefly/command/command_executor.h"
 #include "cachefly/config/config.h"
+#include "cachefly/http/admin_server.h"
+#include "cachefly/metrics/metrics.h"
 #include "cachefly/net/buffer.h"
 #include "cachefly/net/event_loop.h"
 #include "cachefly/net/tcp_connection.h"
@@ -47,10 +50,11 @@ int main(int argc, char* argv[]) {
             throw std::runtime_error("failed to open log file: " + config.log_file);
         }
 
+        cachefly::metrics::Metrics metrics;
         cachefly::shard::ShardedDatabase database(
             config.shard_threads, config.maxmemory_bytes,
-            cachefly::storage::ParseEvictionPolicy(config.eviction_policy));
-        cachefly::command::CommandExecutor executor(&database);
+            cachefly::storage::ParseEvictionPolicy(config.eviction_policy), &metrics);
+        cachefly::command::CommandExecutor executor(&database, &metrics);
 
         const auto replay = [&executor](const std::vector<std::string>& command) {
             const auto result = executor.Execute(command);
@@ -84,9 +88,14 @@ int main(int argc, char* argv[]) {
         std::signal(SIGTERM, HandleSignal);
 
         cachefly::net::TcpServer server(&loop, config.bind_address, config.port);
-        server.SetConnectionCallback([](const cachefly::net::TcpConnection::Ptr& connection) {
+        server.SetConnectionCallback([&metrics](const cachefly::net::TcpConnection::Ptr& connection) {
+            if (connection->Connected()) metrics.ConnectionOpened();
+            else metrics.ConnectionClosed();
             LOG_INFO(std::string(connection->Connected() ? "connected: " : "disconnected: ") +
                      connection->Peer());
+        });
+        server.SetTrafficCallback([&metrics](std::size_t read, std::size_t written) {
+            metrics.AddBytes(read, written);
         });
         server.SetMessageCallback(
             [&parser, &executor](const cachefly::net::TcpConnection::Ptr& connection,
@@ -109,6 +118,25 @@ int main(int argc, char* argv[]) {
                 }
             });
         server.Start();
+        cachefly::http::AdminServer admin(
+            &loop, config.bind_address, config.admin_port, &metrics,
+            [&database, &metrics] {
+                const auto [keys, bytes] = database.Stats();
+                std::ostringstream json;
+                json << "{\"status\":\"ok\",\"connections\":" << metrics.ActiveConnections()
+                     << ",\"commands\":" << metrics.Commands() << ",\"keys\":" << keys
+                     << ",\"memory_bytes\":" << bytes << '}';
+                return json.str();
+            },
+            [&config] {
+                std::ostringstream json;
+                json << "{\"bind\":\"" << config.bind_address << "\",\"port\":" << config.port
+                     << ",\"shard_threads\":" << config.shard_threads
+                     << ",\"maxmemory_bytes\":" << config.maxmemory_bytes
+                     << ",\"eviction_policy\":\"" << config.eviction_policy << "\"}";
+                return json.str();
+            });
+        admin.Start();
         LOG_INFO("cachefly is ready");
         loop.Loop();
         g_loop = nullptr;

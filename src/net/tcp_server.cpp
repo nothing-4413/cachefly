@@ -30,6 +30,9 @@ void TcpServer::SetConnectionCallback(TcpConnection::ConnectionCallback callback
 void TcpServer::SetMessageCallback(TcpConnection::MessageCallback callback) {
     message_callback_ = std::move(callback);
 }
+void TcpServer::SetTrafficCallback(TcpConnection::TrafficCallback callback) {
+    traffic_callback_ = std::move(callback);
+}
 
 void TcpServer::Start() {
     loop_->AssertInLoopThread();
@@ -52,6 +55,7 @@ void TcpServer::HandleAccept() {
             loop_, client_fd, address + ':' + std::to_string(port));
         connection->SetConnectionCallback(connection_callback_);
         connection->SetMessageCallback(message_callback_);
+        connection->SetTrafficCallback(traffic_callback_);
         connection->SetCloseCallback([this](const TcpConnection::Ptr& closed) {
             RemoveConnection(closed);
         });

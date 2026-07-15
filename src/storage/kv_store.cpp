@@ -8,6 +8,8 @@
 #include <system_error>
 #include <utility>
 
+#include "cachefly/metrics/metrics.h"
+
 namespace cachefly::storage {
 
 EvictionPolicy ParseEvictionPolicy(const std::string& name) {
@@ -18,12 +20,17 @@ EvictionPolicy ParseEvictionPolicy(const std::string& name) {
     throw std::invalid_argument("invalid eviction policy: " + name);
 }
 
-KvStore::KvStore(ClockFunction clock, std::size_t maxmemory, EvictionPolicy policy)
-    : clock_(std::move(clock)), maxmemory_(maxmemory), policy_(policy) {}
+KvStore::KvStore(ClockFunction clock, std::size_t maxmemory,
+                 EvictionPolicy policy, metrics::Metrics* metrics)
+    : clock_(std::move(clock)), maxmemory_(maxmemory), policy_(policy), metrics_(metrics) {}
 
 std::optional<std::string> KvStore::Get(const std::string& key) {
     auto found = entries_.find(key);
-    if (found == entries_.end() || RemoveIfExpired(found, clock_())) return std::nullopt;
+    if (found == entries_.end() || RemoveIfExpired(found, clock_())) {
+        if (metrics_ != nullptr) metrics_->CacheMiss();
+        return std::nullopt;
+    }
+    if (metrics_ != nullptr) metrics_->CacheHit();
     found->second.last_access = ++access_clock_;
     if (found->second.frequency < std::numeric_limits<std::uint64_t>::max()) ++found->second.frequency;
     return found->second.value;
@@ -149,6 +156,7 @@ std::size_t KvStore::ActiveExpire(std::size_t max_samples) {
             memory_usage_ -= EntryBytes(current->first, current->second.value);
             entries_.erase(current);
             ++removed;
+            if (metrics_ != nullptr) metrics_->KeyExpired();
         }
     }
     expire_scan_offset_ = entries_.empty() ? 0 : (skip + examined) % entries_.size();
@@ -185,6 +193,7 @@ bool KvStore::RemoveIfExpired(Map::iterator iterator, Clock::time_point now) {
     if (!IsExpired(iterator->second, now)) return false;
     memory_usage_ -= EntryBytes(iterator->first, iterator->second.value);
     entries_.erase(iterator);
+    if (metrics_ != nullptr) metrics_->KeyExpired();
     return true;
 }
 
@@ -221,6 +230,7 @@ bool KvStore::MakeRoom(std::size_t projected, const std::string& protected_key) 
         memory_usage_ -= bytes;
         projected -= bytes;
         entries_.erase(victim);
+        if (metrics_ != nullptr) metrics_->KeyEvicted();
     }
     return true;
 }

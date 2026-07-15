@@ -10,18 +10,22 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "cachefly/base/noncopyable.h"
 #include "cachefly/command/database.h"
 #include "cachefly/storage/kv_store.h"
 
+namespace cachefly::metrics { class Metrics; }
+
 namespace cachefly::shard {
 
 class Shard final : public cachefly::NonCopyable {
 public:
     using Task = std::function<void(storage::KvStore&)>;
-    Shard(std::size_t maxmemory, storage::EvictionPolicy policy);
+    Shard(std::size_t maxmemory, storage::EvictionPolicy policy,
+          metrics::Metrics* metrics);
     ~Shard();
     void Post(Task task);
 
@@ -40,7 +44,8 @@ public:
     explicit ShardedDatabase(
         std::size_t shard_count,
         std::size_t maxmemory = std::numeric_limits<std::size_t>::max(),
-        storage::EvictionPolicy policy = storage::EvictionPolicy::kNoEviction);
+        storage::EvictionPolicy policy = storage::EvictionPolicy::kNoEviction,
+        metrics::Metrics* metrics = nullptr);
     ~ShardedDatabase() override = default;
 
     [[nodiscard]] std::optional<std::string> Get(const std::string& key) override;
@@ -55,6 +60,7 @@ public:
     [[nodiscard]] std::size_t ShardForKey(const std::string& key) const;
     [[nodiscard]] std::size_t ShardCount() const noexcept;
     [[nodiscard]] std::vector<storage::SnapshotEntry> Snapshot();
+    [[nodiscard]] std::pair<std::size_t, std::size_t> Stats();
     void Clear();
 
 private:

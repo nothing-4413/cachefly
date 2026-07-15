@@ -8,13 +8,15 @@
 #include "cachefly/command/command_registry.h"
 #include "cachefly/command/database.h"
 
+namespace cachefly::metrics { class Metrics; }
+
 namespace cachefly::command {
 
 class CommandExecutor final : public cachefly::NonCopyable {
 public:
     using MutationCallback = std::function<void(const std::vector<std::string>&)>;
 
-    explicit CommandExecutor(Database* database);
+    explicit CommandExecutor(Database* database, metrics::Metrics* metrics = nullptr);
 
     void SetMutationCallback(MutationCallback callback);
     [[nodiscard]] resp::Value Execute(const std::vector<std::string>& arguments) const;
@@ -31,6 +33,7 @@ private:
     Database* database_;
     CommandRegistry registry_;
     MutationCallback mutation_callback_;
+    metrics::Metrics* metrics_;
 };
 
 }  // namespace cachefly::command

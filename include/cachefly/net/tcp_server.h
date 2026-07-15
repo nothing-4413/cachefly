@@ -21,6 +21,7 @@ public:
 
     void SetConnectionCallback(TcpConnection::ConnectionCallback callback);
     void SetMessageCallback(TcpConnection::MessageCallback callback);
+    void SetTrafficCallback(TcpConnection::TrafficCallback callback);
     void Start();
     [[nodiscard]] std::size_t ConnectionCount() const noexcept;
 
@@ -37,6 +38,7 @@ private:
     std::unordered_map<int, TcpConnection::Ptr> connections_;
     TcpConnection::ConnectionCallback connection_callback_;
     TcpConnection::MessageCallback message_callback_;
+    TcpConnection::TrafficCallback traffic_callback_;
 };
 
 }  // namespace cachefly::net

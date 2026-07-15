@@ -46,6 +46,7 @@ void TcpConnection::Shutdown() {
 void TcpConnection::SetConnectionCallback(ConnectionCallback callback) { connection_callback_ = std::move(callback); }
 void TcpConnection::SetMessageCallback(MessageCallback callback) { message_callback_ = std::move(callback); }
 void TcpConnection::SetCloseCallback(CloseCallback callback) { close_callback_ = std::move(callback); }
+void TcpConnection::SetTrafficCallback(TrafficCallback callback) { traffic_callback_ = std::move(callback); }
 
 void TcpConnection::ConnectEstablished() {
     loop_->AssertInLoopThread();
@@ -67,7 +68,10 @@ void TcpConnection::HandleRead() {
     auto guard = shared_from_this();
     int saved_errno = 0;
     const long count = input_buffer_.ReadFd(fd_, &saved_errno);
-    if (count > 0 && message_callback_) message_callback_(guard, &input_buffer_);
+    if (count > 0) {
+        if (traffic_callback_) traffic_callback_(static_cast<std::size_t>(count), 0);
+        if (message_callback_) message_callback_(guard, &input_buffer_);
+    }
     else if (count == 0) HandleClose();
     else if (count < 0 && saved_errno != EAGAIN && saved_errno != EWOULDBLOCK) {
         HandleError();
@@ -79,9 +83,12 @@ void TcpConnection::HandleWrite() {
     if (!channel_->IsWriting()) return;
     int saved_errno = 0;
     const long count = output_buffer_.WriteFd(fd_, &saved_errno);
-    if (count > 0 && output_buffer_.ReadableBytes() == 0) {
-        channel_->DisableWriting();
-        if (state_.load() == State::kDisconnecting) ShutdownInLoop();
+    if (count > 0) {
+        if (traffic_callback_) traffic_callback_(0, static_cast<std::size_t>(count));
+        if (output_buffer_.ReadableBytes() == 0) {
+            channel_->DisableWriting();
+            if (state_.load() == State::kDisconnecting) ShutdownInLoop();
+        }
     } else if (count < 0 && saved_errno != EAGAIN && saved_errno != EWOULDBLOCK) {
         HandleError();
     }
@@ -108,7 +115,10 @@ void TcpConnection::SendInLoop(std::string message) {
     std::size_t sent = 0;
     if (!channel_->IsWriting() && output_buffer_.ReadableBytes() == 0) {
         const ssize_t count = ::send(fd_, message.data(), message.size(), MSG_NOSIGNAL);
-        if (count >= 0) sent = static_cast<std::size_t>(count);
+        if (count >= 0) {
+            sent = static_cast<std::size_t>(count);
+            if (traffic_callback_ && sent > 0) traffic_callback_(0, sent);
+        }
         else if (errno != EAGAIN && errno != EWOULDBLOCK) {
             HandleError();
             return;

@@ -8,6 +8,8 @@
 #include <string_view>
 #include <utility>
 
+#include "cachefly/metrics/metrics.h"
+
 namespace cachefly::command {
 namespace {
 
@@ -42,7 +44,8 @@ resp::Value WriteReply(WriteResult result) {
 
 }  // namespace
 
-CommandExecutor::CommandExecutor(Database* database) : database_(database) {
+CommandExecutor::CommandExecutor(Database* database, metrics::Metrics* metrics)
+    : database_(database), metrics_(metrics) {
     if (database_ == nullptr) throw std::invalid_argument("database must not be null");
     RegisterCommands();
 }
@@ -52,23 +55,32 @@ void CommandExecutor::SetMutationCallback(MutationCallback callback) {
 }
 
 resp::Value CommandExecutor::Execute(const std::vector<std::string>& arguments) const {
-    if (arguments.empty()) return resp::Value::Error("ERR empty command");
+    const auto started = std::chrono::steady_clock::now();
+    const auto finish = [this, started](resp::Value value) {
+        if (metrics_ != nullptr) {
+            const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now() - started).count();
+            metrics_->ObserveCommand(static_cast<std::uint64_t>(elapsed), value.type == resp::Type::kError);
+        }
+        return value;
+    };
+    if (arguments.empty()) return finish(resp::Value::Error("ERR empty command"));
     const std::string name = Uppercase(arguments.front());
     const CommandSpec* command = registry_.Find(name);
     if (command == nullptr) {
-        return resp::Value::Error("ERR unknown command '" + arguments.front() + "'");
+        return finish(resp::Value::Error("ERR unknown command '" + arguments.front() + "'"));
     }
     const std::size_t count = arguments.size();
     if (count < command->minimum_arguments ||
         (command->maximum_arguments.has_value() && count > *command->maximum_arguments)) {
-        return ArityError(command->name);
+        return finish(ArityError(command->name));
     }
     resp::Value response = command->handler(arguments);
     if (command->mutating && response.type != resp::Type::kError &&
         response.type != resp::Type::kNull && mutation_callback_) {
         mutation_callback_(arguments);
     }
-    return response;
+    return finish(std::move(response));
 }
 
 const CommandRegistry& CommandExecutor::Registry() const noexcept { return registry_; }

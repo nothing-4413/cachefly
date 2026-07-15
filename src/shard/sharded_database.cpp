@@ -11,8 +11,10 @@
 
 namespace cachefly::shard {
 
-Shard::Shard(std::size_t maxmemory, storage::EvictionPolicy policy)
-    : store_(storage::KvStore::Clock::now, maxmemory, policy), worker_([this] { Run(); }) {}
+Shard::Shard(std::size_t maxmemory, storage::EvictionPolicy policy,
+             metrics::Metrics* metrics)
+    : store_(storage::KvStore::Clock::now, maxmemory, policy, metrics),
+      worker_([this] { Run(); }) {}
 
 Shard::~Shard() {
     {
@@ -56,13 +58,14 @@ void Shard::Run() {
 
 ShardedDatabase::ShardedDatabase(std::size_t shard_count,
                                  std::size_t maxmemory,
-                                 storage::EvictionPolicy policy) {
+                                 storage::EvictionPolicy policy,
+                                 metrics::Metrics* metrics) {
     if (shard_count == 0) throw std::invalid_argument("shard count must be positive");
     shards_.reserve(shard_count);
     for (std::size_t index = 0; index < shard_count; ++index) {
         const std::size_t budget = maxmemory / shard_count +
                                    (index < maxmemory % shard_count ? 1 : 0);
-        shards_.push_back(std::make_unique<Shard>(budget, policy));
+        shards_.push_back(std::make_unique<Shard>(budget, policy, metrics));
     }
 }
 
@@ -161,6 +164,23 @@ std::vector<storage::SnapshotEntry> ShardedDatabase::Snapshot() {
                          std::make_move_iterator(shard_entries.end()));
     }
     return flattened;
+}
+
+std::pair<std::size_t, std::size_t> ShardedDatabase::Stats() {
+    auto remaining = std::make_shared<std::atomic<std::size_t>>(shards_.size());
+    auto keys = std::make_shared<std::atomic<std::size_t>>(0);
+    auto bytes = std::make_shared<std::atomic<std::size_t>>(0);
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+    for (auto& shard : shards_) {
+        shard->Post([remaining, keys, bytes, promise](storage::KvStore& store) {
+            keys->fetch_add(store.Size());
+            bytes->fetch_add(store.MemoryUsage());
+            if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1) promise->set_value();
+        });
+    }
+    future.get();
+    return {keys->load(), bytes->load()};
 }
 
 void ShardedDatabase::Clear() {

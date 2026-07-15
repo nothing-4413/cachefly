@@ -24,9 +24,9 @@ bash scripts/run.sh
 | 6 | 多线程分片 | 已完成 |
 | 7 | 缓存淘汰 | 已完成 |
 | 8 | AOF 与 Snapshot | 已完成 |
-| 9 | HTTP 管理端口与指标 | 待实现 |
+| 9 | HTTP 管理端口与指标 | 已完成 |
 | 10 | 压测与性能分析 | 待实现 |
 | 11 | 部署、简历与面试材料 | 待实现 |
 
-当前已完成模块 8，详细设计见
-[`docs/module-08-persistence.md`](docs/module-08-persistence.md)。
+当前已完成模块 9，详细设计见
+[`docs/module-09-observability.md`](docs/module-09-observability.md)。

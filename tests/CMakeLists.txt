@@ -3,6 +3,7 @@ add_executable(cachefly_tests
     test_command.cpp
     test_eviction.cpp
     test_logger.cpp
+    test_metrics.cpp
     test_main.cpp
     test_net.cpp
     test_persist.cpp

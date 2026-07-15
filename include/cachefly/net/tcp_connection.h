@@ -20,6 +20,7 @@ public:
     using ConnectionCallback = std::function<void(const Ptr&)>;
     using MessageCallback = std::function<void(const Ptr&, Buffer*)>;
     using CloseCallback = std::function<void(const Ptr&)>;
+    using TrafficCallback = std::function<void(std::size_t, std::size_t)>;
 
     TcpConnection(EventLoop* loop, int fd, std::string peer);
     ~TcpConnection();
@@ -33,6 +34,7 @@ public:
     void SetConnectionCallback(ConnectionCallback callback);
     void SetMessageCallback(MessageCallback callback);
     void SetCloseCallback(CloseCallback callback);
+    void SetTrafficCallback(TrafficCallback callback);
     void ConnectEstablished();
     void ConnectDestroyed();
 
@@ -56,6 +58,7 @@ private:
     ConnectionCallback connection_callback_;
     MessageCallback message_callback_;
     CloseCallback close_callback_;
+    TrafficCallback traffic_callback_;
 };
 
 }  // namespace cachefly::net

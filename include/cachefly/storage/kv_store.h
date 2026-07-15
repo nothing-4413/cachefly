@@ -12,6 +12,8 @@
 
 #include "cachefly/command/database.h"
 
+namespace cachefly::metrics { class Metrics; }
+
 namespace cachefly::storage {
 
 struct SnapshotEntry {
@@ -30,7 +32,8 @@ public:
 
     explicit KvStore(ClockFunction clock = Clock::now,
                      std::size_t maxmemory = std::numeric_limits<std::size_t>::max(),
-                     EvictionPolicy policy = EvictionPolicy::kNoEviction);
+                     EvictionPolicy policy = EvictionPolicy::kNoEviction,
+                     metrics::Metrics* metrics = nullptr);
 
     [[nodiscard]] std::optional<std::string> Get(const std::string& key) override;
     [[nodiscard]] command::WriteResult Set(command::SetRequest request) override;
@@ -69,6 +72,7 @@ private:
     ClockFunction clock_;
     std::size_t maxmemory_;
     EvictionPolicy policy_;
+    metrics::Metrics* metrics_;
     Map entries_;
     std::size_t memory_usage_{0};
     std::uint64_t access_clock_{0};
