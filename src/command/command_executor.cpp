@@ -47,6 +47,10 @@ CommandExecutor::CommandExecutor(Database* database) : database_(database) {
     RegisterCommands();
 }
 
+void CommandExecutor::SetMutationCallback(MutationCallback callback) {
+    mutation_callback_ = std::move(callback);
+}
+
 resp::Value CommandExecutor::Execute(const std::vector<std::string>& arguments) const {
     if (arguments.empty()) return resp::Value::Error("ERR empty command");
     const std::string name = Uppercase(arguments.front());
@@ -59,7 +63,12 @@ resp::Value CommandExecutor::Execute(const std::vector<std::string>& arguments) 
         (command->maximum_arguments.has_value() && count > *command->maximum_arguments)) {
         return ArityError(command->name);
     }
-    return command->handler(arguments);
+    resp::Value response = command->handler(arguments);
+    if (command->mutating && response.type != resp::Type::kError &&
+        response.type != resp::Type::kNull && mutation_callback_) {
+        mutation_callback_(arguments);
+    }
+    return response;
 }
 
 const CommandRegistry& CommandExecutor::Registry() const noexcept { return registry_; }

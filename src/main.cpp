@@ -2,6 +2,7 @@
 #include <exception>
 #include <iostream>
 #include <stdexcept>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,8 @@
 #include "cachefly/net/event_loop.h"
 #include "cachefly/net/tcp_connection.h"
 #include "cachefly/net/tcp_server.h"
+#include "cachefly/persist/aof.h"
+#include "cachefly/persist/snapshot.h"
 #include "cachefly/resp/resp_parser.h"
 #include "cachefly/resp/resp_value.h"
 #include "cachefly/shard/sharded_database.h"
@@ -48,6 +51,32 @@ int main(int argc, char* argv[]) {
             config.shard_threads, config.maxmemory_bytes,
             cachefly::storage::ParseEvictionPolicy(config.eviction_policy));
         cachefly::command::CommandExecutor executor(&database);
+
+        const auto replay = [&executor](const std::vector<std::string>& command) {
+            const auto result = executor.Execute(command);
+            if (result.type == cachefly::resp::Type::kError) {
+                throw std::runtime_error("recovery command failed: " + result.string);
+            }
+        };
+        if (config.appendonly) {
+            const std::size_t recovered = cachefly::persist::AofWriter::Replay(
+                config.appendfilename, replay);
+            LOG_INFO("replayed " + std::to_string(recovered) + " AOF commands");
+        } else if (config.snapshot) {
+            const std::size_t recovered = cachefly::persist::Snapshot::Load(
+                config.snapshotfilename, replay);
+            LOG_INFO("loaded " + std::to_string(recovered) + " snapshot entries");
+        }
+
+        std::unique_ptr<cachefly::persist::AofWriter> aof;
+        if (config.appendonly) {
+            aof = std::make_unique<cachefly::persist::AofWriter>(
+                config.appendfilename,
+                cachefly::persist::ParseFsyncPolicy(config.appendfsync));
+            executor.SetMutationCallback([&aof](const std::vector<std::string>& command) {
+                aof->Append(command);
+            });
+        }
         cachefly::resp::Parser parser;
         cachefly::net::EventLoop loop;
         g_loop = &loop;
@@ -83,6 +112,11 @@ int main(int argc, char* argv[]) {
         LOG_INFO("cachefly is ready");
         loop.Loop();
         g_loop = nullptr;
+        if (config.snapshot) {
+            cachefly::persist::Snapshot::Save(config.snapshotfilename,
+                                               database.Snapshot());
+            LOG_INFO("snapshot saved");
+        }
         LOG_INFO("cachefly stopped");
         return 0;
     } catch (const std::exception& error) {

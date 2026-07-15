@@ -2,6 +2,8 @@
 
 #include <chrono>
 #include <future>
+#include <atomic>
+#include <iterator>
 #include <stdexcept>
 #include <utility>
 
@@ -139,6 +141,41 @@ std::size_t ShardedDatabase::ShardForKey(const std::string& key) const {
 }
 
 std::size_t ShardedDatabase::ShardCount() const noexcept { return shards_.size(); }
+
+std::vector<storage::SnapshotEntry> ShardedDatabase::Snapshot() {
+    auto remaining = std::make_shared<std::atomic<std::size_t>>(shards_.size());
+    auto results = std::make_shared<std::vector<std::vector<storage::SnapshotEntry>>>(shards_.size());
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+    for (std::size_t index = 0; index < shards_.size(); ++index) {
+        shards_[index]->Post([index, remaining, results, promise](storage::KvStore& store) {
+            (*results)[index] = store.Snapshot();
+            if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1) promise->set_value();
+        });
+    }
+    future.get();
+    std::vector<storage::SnapshotEntry> flattened;
+    for (auto& shard_entries : *results) {
+        flattened.insert(flattened.end(),
+                         std::make_move_iterator(shard_entries.begin()),
+                         std::make_move_iterator(shard_entries.end()));
+    }
+    return flattened;
+}
+
+void ShardedDatabase::Clear() {
+    auto remaining = std::make_shared<std::atomic<std::size_t>>(shards_.size());
+    auto promise = std::make_shared<std::promise<void>>();
+    auto future = promise->get_future();
+    for (auto& shard : shards_) {
+        shard->Post([remaining, promise](storage::KvStore& store) {
+            store.Clear();
+            if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1) promise->set_value();
+        });
+    }
+    future.get();
+}
+
 Shard& ShardedDatabase::ForKey(const std::string& key) { return *shards_[ShardForKey(key)]; }
 
 }  // namespace cachefly::shard

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <functional>
 #include <vector>
 
 #include "cachefly/base/noncopyable.h"
@@ -11,8 +12,11 @@ namespace cachefly::command {
 
 class CommandExecutor final : public cachefly::NonCopyable {
 public:
+    using MutationCallback = std::function<void(const std::vector<std::string>&)>;
+
     explicit CommandExecutor(Database* database);
 
+    void SetMutationCallback(MutationCallback callback);
     [[nodiscard]] resp::Value Execute(const std::vector<std::string>& arguments) const;
     [[nodiscard]] const CommandRegistry& Registry() const noexcept;
 
@@ -26,6 +30,7 @@ private:
 
     Database* database_;
     CommandRegistry registry_;
+    MutationCallback mutation_callback_;
 };
 
 }  // namespace cachefly::command

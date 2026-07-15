@@ -54,6 +54,8 @@ public:
 
     [[nodiscard]] std::size_t ShardForKey(const std::string& key) const;
     [[nodiscard]] std::size_t ShardCount() const noexcept;
+    [[nodiscard]] std::vector<storage::SnapshotEntry> Snapshot();
+    void Clear();
 
 private:
     Shard& ForKey(const std::string& key);

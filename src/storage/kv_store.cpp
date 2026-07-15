@@ -157,6 +157,24 @@ std::size_t KvStore::ActiveExpire(std::size_t max_samples) {
 
 std::size_t KvStore::Size() const noexcept { return entries_.size(); }
 std::size_t KvStore::MemoryUsage() const noexcept { return memory_usage_; }
+
+std::vector<SnapshotEntry> KvStore::Snapshot() {
+    ActiveExpire(entries_.size());
+    const auto now = clock_();
+    std::vector<SnapshotEntry> snapshot;
+    snapshot.reserve(entries_.size());
+    for (const auto& [key, entry] : entries_) {
+        std::optional<std::chrono::milliseconds> ttl;
+        if (entry.expires_at.has_value()) {
+            ttl = std::max(std::chrono::milliseconds::zero(),
+                           std::chrono::duration_cast<std::chrono::milliseconds>(
+                               *entry.expires_at - now));
+        }
+        snapshot.push_back({key, entry.value, ttl});
+    }
+    return snapshot;
+}
+
 void KvStore::Clear() noexcept { entries_.clear(); memory_usage_ = 0; expire_scan_offset_ = 0; }
 
 bool KvStore::IsExpired(const Entry& entry, Clock::time_point now) const {

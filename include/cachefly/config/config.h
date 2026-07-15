@@ -16,8 +16,10 @@ struct ServerConfig {
     std::string log_level{"info"};
     std::string log_file;
     bool appendonly{false};
+    std::string appendfilename{"cachefly.aof"};
     std::string appendfsync{"everysec"};
     bool snapshot{false};
+    std::string snapshotfilename{"cachefly.snapshot"};
     std::uint16_t admin_port{8080};
 };
 
@@ -35,4 +37,3 @@ private:
 };
 
 }  // namespace cachefly
-

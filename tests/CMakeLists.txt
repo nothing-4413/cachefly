@@ -5,9 +5,10 @@ add_executable(cachefly_tests
     test_logger.cpp
     test_main.cpp
     test_net.cpp
+    test_persist.cpp
     test_resp.cpp
     test_shard.cpp
     test_storage.cpp
 )
-target_link_libraries(cachefly_tests PRIVATE cachefly_net cachefly_shard)
+target_link_libraries(cachefly_tests PRIVATE cachefly_net cachefly_persist)
 add_test(NAME cachefly.unit COMMAND cachefly_tests)

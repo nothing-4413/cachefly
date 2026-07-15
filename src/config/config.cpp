@@ -172,6 +172,9 @@ void ConfigLoader::Validate(const ServerConfig& config) {
     if (!evictions.contains(config.eviction_policy)) throw std::invalid_argument("invalid eviction_policy");
     if (!levels.contains(config.log_level)) throw std::invalid_argument("invalid log_level");
     if (!fsyncs.contains(config.appendfsync)) throw std::invalid_argument("invalid appendfsync");
+    if (config.appendfilename.empty() || config.snapshotfilename.empty()) {
+        throw std::invalid_argument("persistence filenames must not be empty");
+    }
 }
 
 void ConfigLoader::Apply(ServerConfig& config,
@@ -186,11 +189,12 @@ void ConfigLoader::Apply(ServerConfig& config,
     else if (key == "log_level") config.log_level = Lowercase(Trim(value));
     else if (key == "log_file") config.log_file = value;
     else if (key == "appendonly") config.appendonly = ParseBool(value);
+    else if (key == "appendfilename") config.appendfilename = value;
     else if (key == "appendfsync") config.appendfsync = Lowercase(Trim(value));
     else if (key == "snapshot") config.snapshot = ParseBool(value);
+    else if (key == "snapshotfilename") config.snapshotfilename = value;
     else if (key == "admin_port") config.admin_port = ParsePort(value, key);
     else throw std::invalid_argument("unknown config key: " + key);
 }
 
 }  // namespace cachefly
-

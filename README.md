@@ -23,10 +23,10 @@ bash scripts/run.sh
 | 5 | 内存 KV 与 TTL | 已完成 |
 | 6 | 多线程分片 | 已完成 |
 | 7 | 缓存淘汰 | 已完成 |
-| 8 | AOF 与 Snapshot | 待实现 |
+| 8 | AOF 与 Snapshot | 已完成 |
 | 9 | HTTP 管理端口与指标 | 待实现 |
 | 10 | 压测与性能分析 | 待实现 |
 | 11 | 部署、简历与面试材料 | 待实现 |
 
-当前已完成模块 7，详细设计见
-[`docs/module-07-eviction.md`](docs/module-07-eviction.md)。
+当前已完成模块 8，详细设计见
+[`docs/module-08-persistence.md`](docs/module-08-persistence.md)。

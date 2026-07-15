@@ -14,6 +14,12 @@
 
 namespace cachefly::storage {
 
+struct SnapshotEntry {
+    std::string key;
+    std::string value;
+    std::optional<std::chrono::milliseconds> ttl;
+};
+
 enum class EvictionPolicy { kLru, kLfu, kRandom, kNoEviction };
 [[nodiscard]] EvictionPolicy ParseEvictionPolicy(const std::string& name);
 
@@ -40,6 +46,7 @@ public:
     std::size_t ActiveExpire(std::size_t max_samples);
     [[nodiscard]] std::size_t Size() const noexcept;
     [[nodiscard]] std::size_t MemoryUsage() const noexcept;
+    [[nodiscard]] std::vector<SnapshotEntry> Snapshot();
     void Clear() noexcept;
 
 private:
