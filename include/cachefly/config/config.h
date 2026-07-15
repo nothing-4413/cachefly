@@ -9,7 +9,6 @@ namespace cachefly {
 struct ServerConfig {
     std::string bind_address{"0.0.0.0"};
     std::uint16_t port{6379};
-    std::size_t io_threads{1};
     std::size_t shard_threads{4};
     std::size_t maxmemory_bytes{512ULL * 1024ULL * 1024ULL};
     std::string eviction_policy{"lru"};

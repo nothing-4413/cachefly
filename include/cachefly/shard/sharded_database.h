@@ -5,11 +5,14 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <future>
 #include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
+#include <type_traits>
+#include <shared_mutex>
 #include <utility>
 #include <vector>
 
@@ -28,6 +31,17 @@ public:
           metrics::Metrics* metrics);
     ~Shard();
     void Post(Task task);
+
+    template <typename Function>
+    auto Submit(Function&& function)
+        -> std::future<std::invoke_result_t<Function, storage::KvStore&>> {
+        using Result = std::invoke_result_t<Function, storage::KvStore&>;
+        auto task = std::make_shared<std::packaged_task<Result(storage::KvStore&)>>(
+            std::forward<Function>(function));
+        auto future = task->get_future();
+        Post([task](storage::KvStore& store) { (*task)(store); });
+        return future;
+    }
 
 private:
     void Run();
@@ -50,6 +64,8 @@ public:
 
     [[nodiscard]] std::optional<std::string> Get(const std::string& key) override;
     [[nodiscard]] command::WriteResult Set(command::SetRequest request) override;
+    [[nodiscard]] command::WriteResult MSet(
+        std::vector<command::Database::KeyValue> values) override;
     [[nodiscard]] std::int64_t Delete(const std::vector<std::string>& keys) override;
     [[nodiscard]] std::int64_t Exists(const std::vector<std::string>& keys) override;
     [[nodiscard]] bool Expire(const std::string& key, std::chrono::milliseconds ttl) override;
@@ -66,6 +82,7 @@ public:
 private:
     Shard& ForKey(const std::string& key);
     std::vector<std::unique_ptr<Shard>> shards_;
+    mutable std::shared_mutex transaction_mutex_;
 };
 
 }  // namespace cachefly::shard

@@ -56,5 +56,5 @@ TEST_CASE("invalid config rejected") {
     EXPECT_THROW(LoadArgs({"cachefly", "--port=0"}), std::invalid_argument);
     EXPECT_THROW(LoadArgs({"cachefly", "--shard_threads=-1"}), std::invalid_argument);
     EXPECT_THROW(LoadArgs({"cachefly", "--unknown=value"}), std::invalid_argument);
+    EXPECT_THROW(LoadArgs({"cachefly", "--io_threads=2"}), std::invalid_argument);
 }
-

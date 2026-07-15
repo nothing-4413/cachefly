@@ -39,7 +39,9 @@ server buckets are compared; divergence often indicates network/client queueing 
 
 - One network Reactor; storage work is sharded, but the synchronous database facade can pause the Reactor.
 - RESP2 string values only; no transactions, replication, clustering, ACL, Lua, streams, or complex types.
-- Cross-shard MSET is not transactional and per-shard memory budgets can be imbalanced.
+- Cross-shard MSET uses checkpoint/rollback for atomic failure semantics; this copies touched shard
+  state and is intentionally optimized for correctness rather than large-batch throughput.
+- Per-shard memory budgets can be imbalanced and leave capacity stranded in a cold shard.
 - Snapshot occurs on clean shutdown rather than background fork/copy-on-write.
 
 These constraints are deliberate and should be stated before proposing multi-Reactor async continuations,

@@ -186,12 +186,12 @@ resp::Value CommandExecutor::MGet(const std::vector<std::string>& arguments) con
 
 resp::Value CommandExecutor::MSet(const std::vector<std::string>& arguments) const {
     if (arguments.size() % 2 == 0) return ArityError("mset");
+    std::vector<Database::KeyValue> values;
+    values.reserve((arguments.size() - 1) / 2);
     for (std::size_t index = 1; index < arguments.size(); index += 2) {
-        const WriteResult result = database_->Set(
-            {arguments[index], arguments[index + 1], std::nullopt, SetCondition::kNone});
-        if (result != WriteResult::kOk) return WriteReply(result);
+        values.emplace_back(arguments[index], arguments[index + 1]);
     }
-    return resp::Value::Simple("OK");
+    return WriteReply(database_->MSet(std::move(values)));
 }
 
 }  // namespace cachefly::command

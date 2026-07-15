@@ -24,7 +24,9 @@ public:
     void Append(const std::vector<std::string>& command);
 
     template <typename Callback>
-    static std::size_t Replay(const std::string& path, Callback&& callback);
+    static std::size_t Replay(const std::string& path,
+                              Callback&& callback,
+                              bool truncate_incomplete = false);
 
 private:
     struct Record {

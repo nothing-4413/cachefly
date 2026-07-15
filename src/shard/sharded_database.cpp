@@ -1,8 +1,6 @@
 #include "cachefly/shard/sharded_database.h"
 
 #include <chrono>
-#include <future>
-#include <atomic>
 #include <iterator>
 #include <stdexcept>
 #include <utility>
@@ -70,73 +68,105 @@ ShardedDatabase::ShardedDatabase(std::size_t shard_count,
 }
 
 std::optional<std::string> ShardedDatabase::Get(const std::string& key) {
-    auto promise = std::make_shared<std::promise<std::optional<std::string>>>();
-    auto future = promise->get_future();
-    ForKey(key).Post([key, promise](storage::KvStore& store) { promise->set_value(store.Get(key)); });
-    return future.get();
+    std::shared_lock lock(transaction_mutex_);
+    return ForKey(key).Submit([key](storage::KvStore& store) { return store.Get(key); }).get();
 }
 
 command::WriteResult ShardedDatabase::Set(command::SetRequest request) {
-    auto promise = std::make_shared<std::promise<command::WriteResult>>();
-    auto future = promise->get_future();
+    std::shared_lock lock(transaction_mutex_);
     const std::string key = request.key;
-    ForKey(key).Post([request = std::move(request), promise](storage::KvStore& store) mutable {
-        promise->set_value(store.Set(std::move(request)));
-    });
-    return future.get();
+    return ForKey(key).Submit([request = std::move(request)](storage::KvStore& store) mutable {
+        return store.Set(std::move(request));
+    }).get();
+}
+
+command::WriteResult ShardedDatabase::MSet(
+    std::vector<command::Database::KeyValue> values) {
+    std::unique_lock lock(transaction_mutex_);
+    std::vector<std::vector<command::Database::KeyValue>> groups(shards_.size());
+    for (auto& [key, value] : values) {
+        groups[ShardForKey(key)].emplace_back(std::move(key), std::move(value));
+    }
+
+    std::vector<std::optional<storage::KvStore>> checkpoints(shards_.size());
+    std::vector<std::size_t> touched;
+    for (std::size_t index = 0; index < groups.size(); ++index) {
+        if (groups[index].empty()) continue;
+        touched.push_back(index);
+        checkpoints[index] = shards_[index]->Submit(
+            [](storage::KvStore& store) { return store; }).get();
+    }
+
+    const auto rollback = [this, &checkpoints, &touched] {
+        std::vector<std::future<void>> futures;
+        for (const std::size_t index : touched) {
+            futures.push_back(shards_[index]->Submit(
+                [checkpoint = std::move(*checkpoints[index])](storage::KvStore& store) mutable {
+                    store = std::move(checkpoint);
+                }));
+        }
+        for (auto& future : futures) future.get();
+    };
+
+    try {
+        for (const std::size_t index : touched) {
+            const command::WriteResult result = shards_[index]->Submit(
+                [entries = std::move(groups[index])](storage::KvStore& store) mutable {
+                    return store.MSet(std::move(entries));
+                }).get();
+            if (result != command::WriteResult::kOk) {
+                rollback();
+                return result;
+            }
+        }
+    } catch (...) {
+        rollback();
+        throw;
+    }
+    return command::WriteResult::kOk;
 }
 
 std::int64_t ShardedDatabase::Delete(const std::vector<std::string>& keys) {
+    std::shared_lock lock(transaction_mutex_);
     std::int64_t total = 0;
     for (const std::string& key : keys) {
-        auto promise = std::make_shared<std::promise<std::int64_t>>();
-        auto future = promise->get_future();
-        ForKey(key).Post([key, promise](storage::KvStore& store) {
-            promise->set_value(store.Delete({key}));
-        });
-        total += future.get();
+        total += ForKey(key).Submit([key](storage::KvStore& store) {
+            return store.Delete({key});
+        }).get();
     }
     return total;
 }
 
 std::int64_t ShardedDatabase::Exists(const std::vector<std::string>& keys) {
+    std::shared_lock lock(transaction_mutex_);
     std::int64_t total = 0;
     for (const std::string& key : keys) {
-        auto promise = std::make_shared<std::promise<std::int64_t>>();
-        auto future = promise->get_future();
-        ForKey(key).Post([key, promise](storage::KvStore& store) {
-            promise->set_value(store.Exists({key}));
-        });
-        total += future.get();
+        total += ForKey(key).Submit([key](storage::KvStore& store) {
+            return store.Exists({key});
+        }).get();
     }
     return total;
 }
 
 bool ShardedDatabase::Expire(const std::string& key, std::chrono::milliseconds ttl) {
-    auto promise = std::make_shared<std::promise<bool>>();
-    auto future = promise->get_future();
-    ForKey(key).Post([key, ttl, promise](storage::KvStore& store) {
-        promise->set_value(store.Expire(key, ttl));
-    });
-    return future.get();
+    std::shared_lock lock(transaction_mutex_);
+    return ForKey(key).Submit([key, ttl](storage::KvStore& store) {
+        return store.Expire(key, ttl);
+    }).get();
 }
 
 std::int64_t ShardedDatabase::TtlSeconds(const std::string& key) {
-    auto promise = std::make_shared<std::promise<std::int64_t>>();
-    auto future = promise->get_future();
-    ForKey(key).Post([key, promise](storage::KvStore& store) {
-        promise->set_value(store.TtlSeconds(key));
-    });
-    return future.get();
+    std::shared_lock lock(transaction_mutex_);
+    return ForKey(key).Submit([key](storage::KvStore& store) {
+        return store.TtlSeconds(key);
+    }).get();
 }
 
 command::IncrementResult ShardedDatabase::Increment(const std::string& key, std::int64_t delta) {
-    auto promise = std::make_shared<std::promise<command::IncrementResult>>();
-    auto future = promise->get_future();
-    ForKey(key).Post([key, delta, promise](storage::KvStore& store) {
-        promise->set_value(store.Increment(key, delta));
-    });
-    return future.get();
+    std::shared_lock lock(transaction_mutex_);
+    return ForKey(key).Submit([key, delta](storage::KvStore& store) {
+        return store.Increment(key, delta);
+    }).get();
 }
 
 std::size_t ShardedDatabase::ShardForKey(const std::string& key) const {
@@ -146,19 +176,16 @@ std::size_t ShardedDatabase::ShardForKey(const std::string& key) const {
 std::size_t ShardedDatabase::ShardCount() const noexcept { return shards_.size(); }
 
 std::vector<storage::SnapshotEntry> ShardedDatabase::Snapshot() {
-    auto remaining = std::make_shared<std::atomic<std::size_t>>(shards_.size());
-    auto results = std::make_shared<std::vector<std::vector<storage::SnapshotEntry>>>(shards_.size());
-    auto promise = std::make_shared<std::promise<void>>();
-    auto future = promise->get_future();
-    for (std::size_t index = 0; index < shards_.size(); ++index) {
-        shards_[index]->Post([index, remaining, results, promise](storage::KvStore& store) {
-            (*results)[index] = store.Snapshot();
-            if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1) promise->set_value();
-        });
+    std::unique_lock lock(transaction_mutex_);
+    std::vector<std::future<std::vector<storage::SnapshotEntry>>> futures;
+    futures.reserve(shards_.size());
+    for (auto& shard : shards_) {
+        futures.push_back(shard->Submit(
+            [](storage::KvStore& store) { return store.Snapshot(); }));
     }
-    future.get();
     std::vector<storage::SnapshotEntry> flattened;
-    for (auto& shard_entries : *results) {
+    for (auto& future : futures) {
+        auto shard_entries = future.get();
         flattened.insert(flattened.end(),
                          std::make_move_iterator(shard_entries.begin()),
                          std::make_move_iterator(shard_entries.end()));
@@ -167,33 +194,34 @@ std::vector<storage::SnapshotEntry> ShardedDatabase::Snapshot() {
 }
 
 std::pair<std::size_t, std::size_t> ShardedDatabase::Stats() {
-    auto remaining = std::make_shared<std::atomic<std::size_t>>(shards_.size());
-    auto keys = std::make_shared<std::atomic<std::size_t>>(0);
-    auto bytes = std::make_shared<std::atomic<std::size_t>>(0);
-    auto promise = std::make_shared<std::promise<void>>();
-    auto future = promise->get_future();
+    std::shared_lock lock(transaction_mutex_);
+    std::vector<std::future<std::pair<std::size_t, std::size_t>>> futures;
+    futures.reserve(shards_.size());
     for (auto& shard : shards_) {
-        shard->Post([remaining, keys, bytes, promise](storage::KvStore& store) {
-            keys->fetch_add(store.Size());
-            bytes->fetch_add(store.MemoryUsage());
-            if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1) promise->set_value();
-        });
+        futures.push_back(shard->Submit([](storage::KvStore& store) {
+            return std::pair{store.Size(), store.MemoryUsage()};
+        }));
     }
-    future.get();
-    return {keys->load(), bytes->load()};
+    std::size_t keys = 0;
+    std::size_t bytes = 0;
+    for (auto& future : futures) {
+        const auto [shard_keys, shard_bytes] = future.get();
+        keys += shard_keys;
+        bytes += shard_bytes;
+    }
+    return {keys, bytes};
 }
 
 void ShardedDatabase::Clear() {
-    auto remaining = std::make_shared<std::atomic<std::size_t>>(shards_.size());
-    auto promise = std::make_shared<std::promise<void>>();
-    auto future = promise->get_future();
+    std::unique_lock lock(transaction_mutex_);
+    std::vector<std::future<void>> futures;
+    futures.reserve(shards_.size());
     for (auto& shard : shards_) {
-        shard->Post([remaining, promise](storage::KvStore& store) {
+        futures.push_back(shard->Submit([](storage::KvStore& store) {
             store.Clear();
-            if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1) promise->set_value();
-        });
+        }));
     }
-    future.get();
+    for (auto& future : futures) future.get();
 }
 
 Shard& ShardedDatabase::ForKey(const std::string& key) { return *shards_[ShardForKey(key)]; }

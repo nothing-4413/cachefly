@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <utility>
 
 namespace cachefly::command {
 
@@ -26,10 +27,12 @@ struct IncrementResult {
 
 class Database {
 public:
+    using KeyValue = std::pair<std::string, std::string>;
     virtual ~Database() = default;
 
     [[nodiscard]] virtual std::optional<std::string> Get(const std::string& key) = 0;
     [[nodiscard]] virtual WriteResult Set(SetRequest request) = 0;
+    [[nodiscard]] virtual WriteResult MSet(std::vector<KeyValue> values) = 0;
     [[nodiscard]] virtual std::int64_t Delete(const std::vector<std::string>& keys) = 0;
     [[nodiscard]] virtual std::int64_t Exists(const std::vector<std::string>& keys) = 0;
     [[nodiscard]] virtual bool Expire(const std::string& key,

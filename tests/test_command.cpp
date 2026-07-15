@@ -32,6 +32,15 @@ public:
         return cachefly::command::WriteResult::kOk;
     }
 
+    cachefly::command::WriteResult MSet(
+        std::vector<cachefly::command::Database::KeyValue> entries) override {
+        if (fail_mset) return cachefly::command::WriteResult::kNoMemory;
+        auto replacement = values;
+        for (auto& [key, value] : entries) replacement[std::move(key)] = std::move(value);
+        values = std::move(replacement);
+        return cachefly::command::WriteResult::kOk;
+    }
+
     std::int64_t Delete(const std::vector<std::string>& keys) override {
         std::int64_t count = 0;
         for (const auto& key : keys) count += static_cast<std::int64_t>(values.erase(key));
@@ -73,6 +82,7 @@ public:
     }
 
     std::unordered_map<std::string, std::string> values;
+    bool fail_mset{false};
 };
 
 }  // namespace
@@ -113,4 +123,15 @@ TEST_CASE("MGET MSET and command errors") {
               "*3\r\n$1\r\n1\r\n$-1\r\n$1\r\n2\r\n");
     EXPECT_TRUE(executor.Execute({"GET"}).Encode().starts_with("-ERR"));
     EXPECT_TRUE(executor.Execute({"NOPE"}).Encode().starts_with("-ERR"));
+}
+
+TEST_CASE("failed MSET neither mutates nor emits an AOF callback") {
+    FakeDatabase database;
+    database.fail_mset = true;
+    cachefly::command::CommandExecutor executor(&database);
+    std::size_t mutations = 0;
+    executor.SetMutationCallback([&mutations](const auto&) { ++mutations; });
+    EXPECT_TRUE(executor.Execute({"MSET", "a", "1", "b", "2"}).Encode().starts_with("-OOM"));
+    EXPECT_TRUE(database.values.empty());
+    EXPECT_EQ(mutations, 0U);
 }

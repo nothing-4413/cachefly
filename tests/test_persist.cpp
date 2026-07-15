@@ -1,6 +1,8 @@
 #include <cstdio>
 #include <chrono>
 #include <optional>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 #include <utility>
@@ -52,4 +54,26 @@ TEST_CASE("snapshot round trips values and remaining TTL") {
               2U);
     EXPECT_EQ(commands[0][0], "SET");
     EXPECT_EQ(commands[1].size(), 5U);
+}
+
+TEST_CASE("AOF recovery truncates an incomplete tail before new appends") {
+    TemporaryPath path("cachefly-truncated.aof");
+    const std::string valid = cachefly::resp::EncodeCommand({"SET", "key", "value"});
+    {
+        std::ofstream output(path.Get(), std::ios::binary);
+        output << valid << "*2\r\n$3\r\nSET\r\n$4\r\npart";
+    }
+    std::vector<std::vector<std::string>> commands;
+    EXPECT_EQ(cachefly::persist::AofWriter::Replay(
+                  path.Get(), [&commands](const auto& command) { commands.push_back(command); }, true),
+              1U);
+    EXPECT_EQ(std::filesystem::file_size(path.Get()), valid.size());
+    {
+        cachefly::persist::AofWriter writer(
+            path.Get(), cachefly::persist::FsyncPolicy::kAlways);
+        writer.Append({"INCR", "counter"});
+    }
+    EXPECT_EQ(cachefly::persist::AofWriter::Replay(
+                  path.Get(), [](const auto&) {}),
+              2U);
 }

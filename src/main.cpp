@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
         };
         if (config.appendonly) {
             const std::size_t recovered = cachefly::persist::AofWriter::Replay(
-                config.appendfilename, replay);
+                config.appendfilename, replay, true);
             LOG_INFO("replayed " + std::to_string(recovered) + " AOF commands");
         } else if (config.snapshot) {
             const std::size_t recovered = cachefly::persist::Snapshot::Load(

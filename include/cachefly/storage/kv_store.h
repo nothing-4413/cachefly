@@ -37,6 +37,8 @@ public:
 
     [[nodiscard]] std::optional<std::string> Get(const std::string& key) override;
     [[nodiscard]] command::WriteResult Set(command::SetRequest request) override;
+    [[nodiscard]] command::WriteResult MSet(
+        std::vector<command::Database::KeyValue> values) override;
     [[nodiscard]] std::int64_t Delete(const std::vector<std::string>& keys) override;
     [[nodiscard]] std::int64_t Exists(const std::vector<std::string>& keys) override;
     [[nodiscard]] bool Expire(const std::string& key,
@@ -67,6 +69,7 @@ private:
     [[nodiscard]] std::size_t EntryBytes(const std::string& key,
                                          const std::string& value) const noexcept;
     [[nodiscard]] Map::iterator SelectVictim(const std::string& protected_key);
+    [[nodiscard]] Map::iterator SelectVictim();
     bool MakeRoom(std::size_t projected, const std::string& protected_key);
 
     ClockFunction clock_;

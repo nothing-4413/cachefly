@@ -63,6 +63,59 @@ command::WriteResult KvStore::Set(command::SetRequest request) {
     return command::WriteResult::kOk;
 }
 
+command::WriteResult KvStore::MSet(std::vector<command::Database::KeyValue> values) {
+    KvStore trial = *this;
+    trial.metrics_ = nullptr;
+    std::unordered_map<std::string, std::string> updates;
+    for (auto& [key, value] : values) {
+        updates.insert_or_assign(std::move(key), std::move(value));
+    }
+    for (const auto& [key, value] : updates) {
+        static_cast<void>(value);
+        const auto found = trial.entries_.find(key);
+        if (found != trial.entries_.end()) {
+            trial.memory_usage_ -= trial.EntryBytes(found->first, found->second.value);
+            trial.entries_.erase(found);
+        }
+    }
+    std::size_t required = 0;
+    for (const auto& [key, value] : updates) {
+        const std::size_t bytes = trial.EntryBytes(key, value);
+        if (bytes > trial.maxmemory_ - required) return command::WriteResult::kNoMemory;
+        required += bytes;
+    }
+    std::size_t projected = trial.memory_usage_ + required;
+    if (projected < trial.memory_usage_) return command::WriteResult::kNoMemory;
+    if (trial.policy_ == EvictionPolicy::kNoEviction && projected > trial.maxmemory_) {
+        return command::WriteResult::kNoMemory;
+    }
+    std::size_t evicted = 0;
+    while (projected > trial.maxmemory_) {
+        auto victim = trial.SelectVictim();
+        if (victim == trial.entries_.end()) return command::WriteResult::kNoMemory;
+        const std::size_t bytes = trial.EntryBytes(victim->first, victim->second.value);
+        trial.memory_usage_ -= bytes;
+        projected -= bytes;
+        trial.entries_.erase(victim);
+        ++evicted;
+    }
+    for (auto& [key, value] : updates) {
+        trial.entries_.emplace(std::move(key),
+                               Entry{std::move(value), std::nullopt,
+                                     ++trial.access_clock_, 1});
+    }
+    trial.memory_usage_ += required;
+    entries_ = std::move(trial.entries_);
+    memory_usage_ = trial.memory_usage_;
+    access_clock_ = trial.access_clock_;
+    random_state_ = trial.random_state_;
+    expire_scan_offset_ = trial.expire_scan_offset_;
+    if (metrics_ != nullptr) {
+        for (std::size_t index = 0; index < evicted; ++index) metrics_->KeyEvicted();
+    }
+    return command::WriteResult::kOk;
+}
+
 std::int64_t KvStore::Delete(const std::vector<std::string>& keys) {
     std::int64_t removed = 0;
     const auto now = clock_();
@@ -216,6 +269,26 @@ KvStore::Map::iterator KvStore::SelectVictim(const std::string& protected_key) {
         if (best == entries_.end() || policy_ == EvictionPolicy::kRandom ||
             (policy_ == EvictionPolicy::kLru && iterator->second.last_access < best->second.last_access) ||
             (policy_ == EvictionPolicy::kLfu && iterator->second.frequency < best->second.frequency)) best = iterator;
+    }
+    return best;
+}
+
+KvStore::Map::iterator KvStore::SelectVictim() {
+    if (policy_ == EvictionPolicy::kRandom && !entries_.empty()) {
+        random_state_ ^= random_state_ << 13;
+        random_state_ ^= random_state_ >> 7;
+        random_state_ ^= random_state_ << 17;
+        auto candidate = entries_.begin();
+        std::advance(candidate, static_cast<std::ptrdiff_t>(random_state_ % entries_.size()));
+        return candidate;
+    }
+    auto best = entries_.end();
+    for (auto iterator = entries_.begin(); iterator != entries_.end(); ++iterator) {
+        if (best == entries_.end() ||
+            (policy_ == EvictionPolicy::kLru && iterator->second.last_access < best->second.last_access) ||
+            (policy_ == EvictionPolicy::kLfu && iterator->second.frequency < best->second.frequency)) {
+            best = iterator;
+        }
     }
     return best;
 }

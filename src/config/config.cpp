@@ -162,9 +162,7 @@ std::size_t ConfigLoader::ParseMemorySize(const std::string& text) {
 
 void ConfigLoader::Validate(const ServerConfig& config) {
     if (config.bind_address.empty()) throw std::invalid_argument("bind must not be empty");
-    if (config.io_threads == 0 || config.shard_threads == 0) {
-        throw std::invalid_argument("thread counts must be greater than zero");
-    }
+    if (config.shard_threads == 0) throw std::invalid_argument("shard_threads must be positive");
     if (config.maxmemory_bytes == 0) throw std::invalid_argument("maxmemory must be positive");
     static const std::unordered_set<std::string> evictions{"lru", "lfu", "random", "noeviction"};
     static const std::unordered_set<std::string> levels{"trace", "debug", "info", "warn", "warning", "error", "fatal"};
@@ -182,7 +180,6 @@ void ConfigLoader::Apply(ServerConfig& config,
                          const std::string& value) {
     if (key == "bind") config.bind_address = value;
     else if (key == "port") config.port = ParsePort(value, key);
-    else if (key == "io_threads") config.io_threads = ParseUnsigned(value, key);
     else if (key == "shard_threads") config.shard_threads = ParseUnsigned(value, key);
     else if (key == "maxmemory") config.maxmemory_bytes = ParseMemorySize(value);
     else if (key == "eviction_policy") config.eviction_policy = Lowercase(Trim(value));

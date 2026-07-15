@@ -49,3 +49,15 @@ TEST_CASE("LFU retains a frequently accessed key") {
     EXPECT_TRUE(store.Get("a").has_value());
     EXPECT_TRUE(!store.Get("b").has_value());
 }
+
+TEST_CASE("MSET rejects an oversized batch without partial writes") {
+    cachefly::storage::KvStore probe;
+    static_cast<void>(Put(probe, "aa", "old"));
+    cachefly::storage::KvStore store(cachefly::storage::KvStore::Clock::now,
+        probe.MemoryUsage(), cachefly::storage::EvictionPolicy::kNoEviction);
+    EXPECT_EQ(Put(store, "aa", "old"), cachefly::command::WriteResult::kOk);
+    EXPECT_EQ(store.MSet({{"aa", "new"}, {"bb", "2"}}),
+              cachefly::command::WriteResult::kNoMemory);
+    EXPECT_EQ(store.Get("aa"), std::optional<std::string>("old"));
+    EXPECT_TRUE(!store.Get("bb").has_value());
+}
