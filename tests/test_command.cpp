@@ -6,6 +6,7 @@
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
@@ -16,6 +17,10 @@
 
 namespace {
 
+bool StartsWith(std::string_view value, std::string_view prefix) {
+    return value.size() >= prefix.size() && value.substr(0, prefix.size()) == prefix;
+}
+
 class FakeDatabase final : public cachefly::command::Database {
 public:
     std::optional<std::string> Get(const std::string& key) override {
@@ -24,7 +29,7 @@ public:
     }
 
     cachefly::command::WriteResult Set(cachefly::command::SetRequest request) override {
-        const bool exists = values.contains(request.key);
+        const bool exists = values.find(request.key) != values.end();
         if (request.condition == cachefly::command::SetCondition::kIfAbsent && exists) {
             return cachefly::command::WriteResult::kConditionFailed;
         }
@@ -52,23 +57,23 @@ public:
 
     std::int64_t Exists(const std::vector<std::string>& keys) override {
         std::int64_t count = 0;
-        for (const auto& key : keys) if (values.contains(key)) ++count;
+        for (const auto& key : keys) if (values.find(key) != values.end()) ++count;
         return count;
     }
 
     bool Expire(const std::string& key, std::chrono::milliseconds ttl) override {
         static_cast<void>(ttl);
-        return values.contains(key);
+        return values.find(key) != values.end();
     }
 
     std::int64_t TtlSeconds(const std::string& key) override {
-        return values.contains(key) ? -1 : -2;
+        return values.find(key) != values.end() ? -1 : -2;
     }
 
     cachefly::command::IncrementResult Increment(const std::string& key,
                                                  std::int64_t delta) override {
         std::int64_t current = 0;
-        if (values.contains(key)) {
+        if (values.find(key) != values.end()) {
             const std::string& text = values[key];
             const auto result = std::from_chars(text.data(), text.data() + text.size(), current);
             if (result.ec != std::errc{} || result.ptr != text.data() + text.size()) {
@@ -115,7 +120,7 @@ TEST_CASE("SET options and integer commands are validated") {
     EXPECT_EQ(executor.Execute({"SET", "counter", "11", "NX"}).Encode(), "$-1\r\n");
     EXPECT_EQ(executor.Execute({"INCR", "counter"}).Encode(), ":11\r\n");
     EXPECT_EQ(executor.Execute({"DECR", "counter"}).Encode(), ":10\r\n");
-    EXPECT_TRUE(executor.Execute({"SET", "x", "y", "EX", "bad"}).Encode().starts_with("-ERR"));
+    EXPECT_TRUE(StartsWith(executor.Execute({"SET", "x", "y", "EX", "bad"}).Encode(), "-ERR"));
 }
 
 TEST_CASE("MGET MSET and command errors") {
@@ -124,8 +129,8 @@ TEST_CASE("MGET MSET and command errors") {
     EXPECT_EQ(executor.Execute({"MSET", "a", "1", "b", "2"}).Encode(), "+OK\r\n");
     EXPECT_EQ(executor.Execute({"MGET", "a", "none", "b"}).Encode(),
               "*3\r\n$1\r\n1\r\n$-1\r\n$1\r\n2\r\n");
-    EXPECT_TRUE(executor.Execute({"GET"}).Encode().starts_with("-ERR"));
-    EXPECT_TRUE(executor.Execute({"NOPE"}).Encode().starts_with("-ERR"));
+    EXPECT_TRUE(StartsWith(executor.Execute({"GET"}).Encode(), "-ERR"));
+    EXPECT_TRUE(StartsWith(executor.Execute({"NOPE"}).Encode(), "-ERR"));
 }
 
 TEST_CASE("failed MSET neither mutates nor emits an AOF callback") {
@@ -134,7 +139,8 @@ TEST_CASE("failed MSET neither mutates nor emits an AOF callback") {
     cachefly::command::CommandExecutor executor(&database);
     std::size_t mutations = 0;
     executor.SetMutationCallback([&mutations](const auto&) { ++mutations; });
-    EXPECT_TRUE(executor.Execute({"MSET", "a", "1", "b", "2"}).Encode().starts_with("-OOM"));
+    EXPECT_TRUE(StartsWith(
+        executor.Execute({"MSET", "a", "1", "b", "2"}).Encode(), "-OOM"));
     EXPECT_TRUE(database.values.empty());
     EXPECT_EQ(mutations, 0U);
 }
@@ -145,7 +151,8 @@ TEST_CASE("mutation guard rejects writes before database changes") {
     std::size_t mutations = 0;
     executor.SetMutationGuard([] { throw std::runtime_error("persistence failed"); });
     executor.SetMutationCallback([&mutations](const auto&) { ++mutations; });
-    EXPECT_TRUE(executor.Execute({"SET", "key", "value"}).Encode().starts_with("-MISCONF"));
+    EXPECT_TRUE(StartsWith(
+        executor.Execute({"SET", "key", "value"}).Encode(), "-MISCONF"));
     EXPECT_TRUE(database.values.empty());
     EXPECT_EQ(mutations, 0U);
 }

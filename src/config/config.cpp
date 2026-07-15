@@ -69,7 +69,7 @@ std::uint16_t ParsePort(const std::string& text, const std::string& key) {
 }
 
 std::pair<std::string, std::string> ParseOption(std::string_view argument) {
-    if (!argument.starts_with("--")) {
+    if (argument.size() < 2 || argument.substr(0, 2) != "--") {
         throw std::invalid_argument("unexpected positional argument: " + std::string(argument));
     }
     const std::size_t equals = argument.find('=');
@@ -83,7 +83,8 @@ std::pair<std::string, std::string> ParseOption(std::string_view argument) {
 void AppendJsonString(std::ostringstream& output, std::string_view value) {
     static constexpr char kHex[] = "0123456789abcdef";
     output << '"';
-    for (const unsigned char character : value) {
+    for (const char raw_character : value) {
+        const auto character = static_cast<unsigned char>(raw_character);
         switch (character) {
             case '"': output << "\\\""; break;
             case '\\': output << "\\\\"; break;
@@ -222,9 +223,15 @@ void ConfigLoader::Validate(const ServerConfig& config) {
     static const std::unordered_set<std::string> evictions{"lru", "lfu", "random", "noeviction"};
     static const std::unordered_set<std::string> levels{"trace", "debug", "info", "warn", "warning", "error", "fatal"};
     static const std::unordered_set<std::string> fsyncs{"always", "everysec", "no"};
-    if (!evictions.contains(config.eviction_policy)) throw std::invalid_argument("invalid eviction_policy");
-    if (!levels.contains(config.log_level)) throw std::invalid_argument("invalid log_level");
-    if (!fsyncs.contains(config.appendfsync)) throw std::invalid_argument("invalid appendfsync");
+    if (evictions.find(config.eviction_policy) == evictions.end()) {
+        throw std::invalid_argument("invalid eviction_policy");
+    }
+    if (levels.find(config.log_level) == levels.end()) {
+        throw std::invalid_argument("invalid log_level");
+    }
+    if (fsyncs.find(config.appendfsync) == fsyncs.end()) {
+        throw std::invalid_argument("invalid appendfsync");
+    }
     if (config.appendfilename.empty() || config.snapshotfilename.empty()) {
         throw std::invalid_argument("persistence filenames must not be empty");
     }
