@@ -1,0 +1,36 @@
+services:
+  cachefly:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command:
+      - --config=/etc/cachefly/cachefly.conf
+      - --appendonly=true
+      - --appendfilename=/data/cachefly.aof
+      - --snapshot=true
+      - --snapshotfilename=/data/cachefly.snapshot
+    ports:
+      - "6379:6379"
+      - "8080:8080"
+    volumes:
+      - cachefly-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-h", "127.0.0.1", "-p", "6379", "PING"]
+      interval: 5s
+      timeout: 2s
+      retries: 10
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      cachefly:
+        condition: service_healthy
+
+volumes:
+  cachefly-data:

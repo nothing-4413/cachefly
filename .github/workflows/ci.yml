@@ -25,3 +25,5 @@ jobs:
         run: bash -x tests/integration/smoke.sh ./build/src/cachefly admin
       - name: Integration benchmark smoke
         run: bash -x tests/integration/smoke.sh ./build/src/cachefly benchmark
+      - name: Build deployment image
+        run: docker build -f deploy/Dockerfile -t cachefly:ci .

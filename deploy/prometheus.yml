@@ -1,0 +1,7 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: cachefly
+    static_configs:
+      - targets: ["cachefly:8080"]
