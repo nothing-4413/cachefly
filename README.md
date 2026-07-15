@@ -25,8 +25,8 @@ bash scripts/run.sh
 | 7 | 缓存淘汰 | 已完成 |
 | 8 | AOF 与 Snapshot | 已完成 |
 | 9 | HTTP 管理端口与指标 | 已完成 |
-| 10 | 压测与性能分析 | 待实现 |
+| 10 | 压测与性能分析 | 已完成 |
 | 11 | 部署、简历与面试材料 | 待实现 |
 
-当前已完成模块 9，详细设计见
-[`docs/module-09-observability.md`](docs/module-09-observability.md)。
+当前已完成模块 10，详细设计见
+[`docs/module-10-benchmark.md`](docs/module-10-benchmark.md)。

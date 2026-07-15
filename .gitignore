@@ -6,4 +6,4 @@
 *.log
 *.swp
 *.user
-
+/benchmark/results/

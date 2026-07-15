@@ -15,4 +15,13 @@ jobs:
         run: cmake --build build --parallel
       - name: Test
         run: ctest --test-dir build --output-on-failure
-
+      - name: Install Redis client
+        run: sudo apt-get update && sudo apt-get install -y redis-tools
+      - name: Integration basic commands
+        run: bash -x tests/integration/smoke.sh ./build/src/cachefly basic
+      - name: Integration pipeline
+        run: bash -x tests/integration/smoke.sh ./build/src/cachefly pipeline
+      - name: Integration admin HTTP
+        run: bash -x tests/integration/smoke.sh ./build/src/cachefly admin
+      - name: Integration benchmark smoke
+        run: bash -x tests/integration/smoke.sh ./build/src/cachefly benchmark
